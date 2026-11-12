@@ -1,0 +1,147 @@
+#!/bin/sh
+# FrameColor's Vulkan correction layer and bench in Frame Dock. The colour itself is set on the Color page of the
+# Frame Dock dashboard tab; the app runs as framedock.service.
+set -eu
+
+fc_data_dir="$HOME/.local/share/framecolor"
+fc_manifest="$fc_data_dir/layer/vkBasalt.json"
+fc_disabled="$fc_manifest.disabled"
+fc_legacy_unit="$HOME/.config/systemd/user/steamvr.service.d/90-framecolor-vkbasalt.conf"
+fc_guard_limit="$HOME/.config/framecolor/guard-failure-limit"
+fc_guard_failures="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/framecolor/failed-starts"
+fc_app="$HOME/.local/bin/framedock"
+fc_unit=framedock.service
+fc_unit_file="$HOME/.config/systemd/user/$fc_unit"
+
+# Called directly (not through "$0": that breaks when the script is run as `sh framedockctl`)
+fc_status() {
+    if [ -f "$fc_manifest" ]; then printf 'Vulkan correction: enabled\n';
+    elif [ -f "$fc_disabled" ]; then printf 'Vulkan correction: disabled\n';
+    else printf 'Vulkan correction: not installed\n'; fi
+    printf 'Frame Dock service: %s\n' "$(systemctl --user is-active "$fc_unit" || true)"
+    printf 'Frame Dock autostart: %s\n' "$(systemctl --user is-enabled "$fc_unit" || true)"
+    printf 'SteamVR runtime: %s\n' "$(steamvr path)"
+    printf 'SteamVR service: %s\n' "$(systemctl --user is-active steamvr.service || true)"
+    fc_limit=$(cat "$fc_guard_limit" 2>/dev/null || true)
+    case "$fc_limit" in 3) ;; *) fc_limit=1 ;; esac
+    fc_count=$(cat "$fc_guard_failures" 2>/dev/null || true)
+    case "$fc_count" in *[!0-9]*|'') fc_count=0 ;; esac
+    printf 'Startup guard: disable after %s failed launch(es); current count %s\n' "$fc_limit" "$fc_count"
+    if [ -e "$fc_legacy_unit" ]; then printf 'Warning: older Vulkan test drop-in is active.\n'; fi
+}
+
+case "${1:-}" in
+    enable)
+        if [ -e "$fc_legacy_unit" ]; then
+            printf 'An older FrameColor Vulkan test is active: %s\n' "$fc_legacy_unit" >&2
+            exit 1
+        fi
+        if [ "$(steamvr path)" != /opt/steamvr ]; then
+            printf 'SteamVR must use the stock /opt/steamvr runtime.\n' >&2
+            exit 1
+        fi
+        [ -f "$fc_data_dir/lib/libvkbasalt.so" ] || { printf 'Vulkan layer is not installed.\n' >&2; exit 1; }
+        fc_was_on=false
+        if [ -f "$fc_manifest" ] && [ ! -f "$fc_disabled" ]; then fc_was_on=true; fi
+        if [ -f "$fc_disabled" ]; then mv "$fc_disabled" "$fc_manifest"; fi
+        [ -f "$fc_manifest" ] || { printf 'Vulkan layer manifest is missing.\n' >&2; exit 1; }
+        rm -f "$fc_guard_failures"
+        if [ "$fc_was_on" = true ]; then
+            # Already on: SteamVR has it loaded (or loads it at its next start). No restart for nothing. But a running
+            # SteamVR keeps the layer it started with: a newer one (install.sh --no-restart) waits for a restart
+            printf 'FrameColor Vulkan correction is already enabled: SteamVR is not restarted.\n'
+            printf 'A running SteamVR keeps the layer it started with. If the layer was installed or updated since, load it with:\n'
+            printf '  systemctl --user restart steamvr.service   (a running game closes)\n'
+        else
+            printf 'Restarting SteamVR to load the Vulkan layer (a running game closes)...\n'
+            systemctl --user restart steamvr.service
+        fi
+        # Turns the layer on, not autostart: Frame Dock is started now if it isn't running (its Color page changes
+        # the correction), and starts with SteamVR later only if its autostart is on
+        if [ -f "$fc_unit_file" ]; then
+            systemctl --user start "$fc_unit"
+            printf 'FrameColor Vulkan correction enabled, Frame Dock is running. If SteamVR fails to start, the guard disables the layer.\n'
+        else
+            printf 'FrameColor Vulkan correction enabled (Frame Dock is not installed). If SteamVR fails to start, the guard disables the layer.\n'
+        fi
+        ;;
+    disable)
+        # Only the layer: Frame Dock keeps running (its Color page then offers panel brightness only).
+        # Restarting SteamVR restarts Frame Dock too (PartOf), if its autostart is on.
+        if [ ! -f "$fc_manifest" ]; then
+            # Already off (or not installed): nothing loads it, so no SteamVR restart for nothing
+            rm -f "$fc_guard_failures"
+            printf 'FrameColor Vulkan correction is already disabled: SteamVR is not restarted.\n'
+            exit 0
+        fi
+        mv "$fc_manifest" "$fc_disabled"
+        rm -f "$fc_guard_failures"
+        printf 'Restarting SteamVR to unload the Vulkan layer (a running game closes)...\n'
+        systemctl --user restart steamvr.service
+        printf 'FrameColor Vulkan correction disabled. Saved settings are unchanged; Frame Dock keeps running.\n'
+        ;;
+    status)
+        fc_status
+        ;;
+    doctor)
+        fc_ok=true
+        if [ "$(uname -m)" != aarch64 ]; then printf 'FAIL: not ARM64.\n'; fc_ok=false; fi
+        if [ "$(steamvr path)" != /opt/steamvr ]; then printf 'FAIL: SteamVR is not using /opt/steamvr.\n'; fc_ok=false; fi
+        if [ ! -f "$fc_data_dir/lib/libvkbasalt.so" ]; then printf 'FAIL: layer library missing.\n'; fc_ok=false; fi
+        if [ ! -f "$fc_manifest" ] && [ ! -f "$fc_disabled" ]; then
+            printf 'FAIL: layer manifest missing.\n'; fc_ok=false
+        fi
+        if [ -e "$fc_legacy_unit" ]; then printf 'FAIL: older Vulkan test drop-in is active.\n'; fc_ok=false; fi
+        if [ "$fc_ok" = true ]; then printf 'FrameColor preflight: OK\n'; else exit 1; fi
+        ;;
+    guard)
+        case "${2:-}" in
+            1|3)
+                mkdir -p "$(dirname "$fc_guard_limit")"
+                chmod 700 "$(dirname "$fc_guard_limit")" 2>/dev/null || true
+                printf '%s\n' "$2" > "$fc_guard_limit.tmp"
+                mv "$fc_guard_limit.tmp" "$fc_guard_limit"
+                rm -f "$fc_guard_failures"
+                printf 'Startup guard will disable FrameColor after %s consecutive failed launch(es).\n' "$2"
+                ;;
+            status)
+                fc_status
+                ;;
+            *) printf 'Usage: framedockctl guard 1|3|status\n' >&2; exit 2 ;;
+        esac
+        ;;
+    lang|language)
+        # The language is Frame Dock's own setting now (its dashboard tab), not a framedockctl command
+        printf 'framedockctl no longer sets the language: use the language button at the top of the Frame Dock tab.\n' >&2
+        exit 2
+        ;;
+    bench)
+        # Frame timing and memory while the correction runs (framedock --bench connects as a Background app). Compare runs with the
+        # correction off, on, and with different sharpness values.
+        if [ "${2:-}" = --compare ]; then
+            # Paired: alternate sharpness A and B, 2 s each; whole percent 0-100.
+            fc_usage='Usage: framedockctl bench --compare A B [pairs]   (A, B: sharpness in whole percent 0-100; pairs 5-60, default 12)'
+            [ "$#" -le 5 ] || { printf '%s\n' "$fc_usage" >&2; exit 2; }
+            fc_pairs="${5:-12}"
+            for fc_arg in "${3:-}" "${4:-}"; do
+                case "$fc_arg" in [0-9]|[1-9][0-9]|100) ;; *) printf '%s\n' "$fc_usage" >&2; exit 2 ;; esac
+            done
+            case "$fc_pairs" in [5-9]|[1-5][0-9]|60) ;; *) printf '%s\n' "$fc_usage" >&2; exit 2 ;; esac
+            [ -x "$fc_app" ] || { printf 'Frame Dock is not installed.\n' >&2; exit 1; }
+            exec "$fc_app" --bench-compare "$3" "$4" "$fc_pairs"
+        fi
+        fc_seconds="${2:-8}"
+        case "$fc_seconds" in
+            ''|*[!0-9]*) printf 'Usage: framedockctl bench [seconds 1-60]\n' >&2; exit 2 ;;
+        esac
+        if [ "$fc_seconds" -lt 1 ] || [ "$fc_seconds" -gt 60 ]; then
+            printf 'Usage: framedockctl bench [seconds 1-60]\n' >&2; exit 2
+        fi
+        [ -x "$fc_app" ] || { printf 'Frame Dock is not installed.\n' >&2; exit 1; }
+        exec "$fc_app" --bench "$fc_seconds"
+        ;;
+    *)
+        printf 'Usage: framedockctl enable|disable|status|doctor|guard 1|3|status|bench [seconds]|bench --compare A B [pairs]\n' >&2
+        exit 2
+        ;;
+esac

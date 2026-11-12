@@ -1,0 +1,69 @@
+#!/bin/sh
+# Disable our Vulkan layer after repeated failed SteamVR launches. This runs
+# from a user-unit drop-in, before Valve's own repair path when set to 1.
+#
+# "start" is steamvr.service's ExecCondition: any exit but 0 would skip
+# (1-254) or fail (255) SteamVR's start. It only notes the start time for
+# "stop", and nothing that goes wrong with that (no runtime dir, a full or
+# read-only disk, no HOME) may keep SteamVR from starting: it always exits 0.
+set -u
+
+fc_home="${HOME:-/nonexistent}"
+fc_data_dir="$fc_home/.local/share/framecolor"
+fc_manifest="$fc_data_dir/layer/vkBasalt.json"
+fc_disabled="$fc_manifest.disabled"
+fc_runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u 2>/dev/null || echo 0)}/framecolor"
+fc_started="$fc_runtime_dir/steamvr-started"
+fc_failures="$fc_runtime_dir/failed-starts"
+fc_limit_file="$fc_home/.config/framecolor/guard-failure-limit"
+fc_limit=$(cat "$fc_limit_file" 2>/dev/null || true)
+case "$fc_limit" in 3) ;; *) fc_limit=1 ;; esac
+
+case "${1:-}" in
+    start)
+        if [ -f "$fc_manifest" ]; then
+            mkdir -p "$fc_runtime_dir" 2>/dev/null
+            chmod 700 "$fc_runtime_dir" 2>/dev/null
+            if ! { date +%s > "$fc_started"; } 2>/dev/null; then
+                printf 'FrameColor guard: can'"'"'t write %s; SteamVR starts anyway (this start isn'"'"'t counted).\n' \
+                    "$fc_started" >&2
+            fi
+        else
+            rm -f "$fc_started" "$fc_failures" 2>/dev/null
+        fi
+        exit 0
+        ;;
+    stop)
+        set -e
+        if [ ! -f "$fc_manifest" ]; then rm -f "$fc_started" "$fc_failures"; exit 0; fi
+        [ -r "$fc_started" ] || exit 0
+        read -r fc_start_time < "$fc_started" || exit 0
+        case "$fc_start_time" in *[!0-9]*|'') exit 0 ;; esac
+        fc_now=$(date +%s)
+        fc_elapsed=$((fc_now - fc_start_time))
+        if [ "${SERVICE_RESULT:-}" = success ]; then
+            rm -f "$fc_failures"
+        elif [ -n "${SERVICE_RESULT:-}" ] && [ "$fc_elapsed" -lt 10 ]; then
+            fc_count=$(cat "$fc_failures" 2>/dev/null || true)
+            case "$fc_count" in *[!0-9]*|'') fc_count=0 ;; esac
+            fc_count=$((fc_count + 1))
+            if [ "$fc_count" -ge "$fc_limit" ]; then
+                mv "$fc_manifest" "$fc_disabled"
+                rm -f "$fc_failures"
+                printf 'FrameColor: disabled Vulkan layer after %s failed SteamVR launch(es); last result %s (%ss).\n' \
+                    "$fc_count" "${SERVICE_RESULT:-unknown}" "$fc_elapsed" >&2
+            else
+                printf '%s\n' "$fc_count" > "$fc_failures"
+                printf 'FrameColor: SteamVR launch failure %s/%s; Vulkan layer remains enabled.\n' \
+                    "$fc_count" "$fc_limit" >&2
+            fi
+        else
+            rm -f "$fc_failures"
+        fi
+        rm -f "$fc_started"
+        ;;
+    *)
+        printf 'Usage: framecolor-guard start|stop\n' >&2
+        exit 2
+        ;;
+esac

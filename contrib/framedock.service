@@ -1,0 +1,22 @@
+[Unit]
+Description=Frame Dock (performance panel and display colour for Steam Frame)
+# An OpenVR overlay: runs only while SteamVR does
+After=steamvr.service
+PartOf=steamvr.service
+# A crash at every start stops after 10 starts in 5 minutes instead of looping forever (systemd's default, 5 in 10 s,
+# never trips with RestartSec=5). A SteamVR restart costs one start: the app waits for SteamVR itself
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+# Settings: ~/.config/frame-perf-overlay/config.json (panel, layout, profiles) and ~/.config/framecolor/ (colour)
+ExecStart=%h/.local/bin/framedock
+# Restart even after a clean exit, so it comes back when only SteamVR restarts (steamvr.service keeps running).
+# When steamvr.service stops, PartOf stops this too, and it isn't restarted
+Restart=always
+RestartSec=5
+# Quit app on the dashboard tab (or closing it from the dashboard) exits with 3: the user stopped it, don't restart
+RestartPreventExitStatus=3
+
+[Install]
+WantedBy=steamvr.service

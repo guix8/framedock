@@ -1,0 +1,23 @@
+# Meson cross file for the Vulkan layer (third_party/vkbasalt) on the Steam Frame, clang + lld against the sysroot
+# from make-sysroot.sh. @SYSROOT@ is filled in by build-layer.sh. glslangValidator runs on the PC (a build tool).
+[binaries]
+c = 'clang'
+cpp = 'clang++'
+strip = 'llvm-strip'
+pkg-config = 'pkg-config'
+
+[built-in options]
+c_args = ['--target=aarch64-unknown-linux-gnu', '--sysroot=@SYSROOT@']
+cpp_args = ['--target=aarch64-unknown-linux-gnu', '--sysroot=@SYSROOT@']
+c_link_args = ['--target=aarch64-unknown-linux-gnu', '--sysroot=@SYSROOT@', '-fuse-ld=lld']
+cpp_link_args = ['--target=aarch64-unknown-linux-gnu', '--sysroot=@SYSROOT@', '-fuse-ld=lld']
+
+[properties]
+sys_root = '@SYSROOT@'
+pkg_config_libdir = ['@SYSROOT@/usr/lib/pkgconfig', '@SYSROOT@/usr/share/pkgconfig']
+
+[host_machine]
+system = 'linux'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'

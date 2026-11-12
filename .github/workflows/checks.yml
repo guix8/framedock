@@ -1,0 +1,18 @@
+name: Checks
+on: [push, pull_request]
+jobs:
+  lightweight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check scripts
+        run: |
+          sh -n contrib/install.sh contrib/uninstall.sh contrib/package.sh
+          sh -n contrib/framedockctl contrib/framecolor-guard
+          sh -n tests/test_guard.sh tests/test_framedockctl.sh
+          sh tests/test_guard.sh
+          sh tests/test_framedockctl.sh
+      - name: Python tests (LUT generator, sources, install files)
+        run: python3 -m unittest discover -s tests -v
+# The C++ build and ctest need libopenvr_api.so from SteamVR (ARM64), so they run on the Frame:
+#   cmake -G Ninja -S . -B build && cmake --build build && ctest --test-dir build

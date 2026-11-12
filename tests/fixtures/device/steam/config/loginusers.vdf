@@ -1,0 +1,35 @@
+"users"
+{
+	"76561190000000001"
+	{
+		"AccountName"		"alpha_acct"
+		"PersonaName"		"Alpha {the} \"Great\""
+		"RememberPassword"		"1"
+		"AutoLogin"		"0"
+		"timestamp"		"1793280936"
+	}
+	"76561190000000002"
+	{
+		"AccountName"		"bravo_acct"
+		"PersonaName"		""
+		"AutoLogin"		"1"
+	}
+	"76561190000000003"
+	{
+		"PersonaName"		"no account name"
+		"AutoLogin"		"1"
+	}
+	"76561190000000004"
+	{
+		"AccountName"		"nested"
+		"Extra"
+		{
+			"Inner"		"x"
+		}
+	}
+	"76561190000000005"
+	{
+		"AccountName"		"charlie_acct"
+		"PersonaName"		"찰리 \\ 백슬래시"
+	}
+}

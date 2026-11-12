@@ -1,0 +1,229 @@
+# pactl list sinks on the Frame (2026-10-30, SteamOS 0.4.5, PipeWire 1.6.8), then made-up sinks: what an
+# unrestricted client would also see (the raw speaker, the filters) and a Bluetooth headset and a null sink.
+Sink #165
+	State: SUSPENDED
+	Name: alsa_loopback_device.stereo.alsa_output.platform-sound.HiFi__Speaker__sink
+	Description: Built-in Audio Playback
+	Driver: PipeWire
+	Sample Specification: float32le 2ch 48000Hz
+	Channel Map: front-left,front-right
+	Owner Module: 4294967295
+	Mute: no
+	Volume: front-left: 37651 /  57% / -14.44 dB,   front-right: 37651 /  57% / -14.44 dB
+	        balance 0.00
+	Base Volume: 65536 / 100% / 0.00 dB
+	Monitor Source: alsa_loopback_device.stereo.alsa_output.platform-sound.HiFi__Speaker__sink.monitor
+	Latency: 0 usec, configured 0 usec
+	Flags: DECIBEL_VOLUME LATENCY 
+	Properties:
+		audio.channels = "2"
+		media.class = "Audio/Sink"
+		device.description = "Built-in Audio"
+		node.name = "alsa_loopback_device.stereo.alsa_output.platform-sound.HiFi__Speaker__sink"
+		priority.session = "801"
+		priority.driver = "801"
+		audio.position = "[FL FR]"
+		device.id = "69"
+		card.profile.device = "0"
+		alsa.loopback = "true"
+		node.group = "loopback-1911-17"
+		node.link-group = "loopback-1911-17"
+		node.virtual = "true"
+		resample.prefill = "true"
+		resample.disable = "true"
+		media.name = "Built-in Audio Playback input"
+		stream.is-live = "true"
+		node.want-driver = "true"
+		node.autoconnect = "true"
+		port.group = "stream.0"
+		adapt.follower.spa-node = ""
+		object.register = "false"
+		factory.id = "12"
+		clock.quantum-limit = "8192"
+		node.loop.name = "data-loop.0"
+		library.name = "audioconvert/libspa-audioconvert"
+		client.id = "162"
+		object.id = "128"
+		object.serial = "165"
+		node.driver-id = "76"
+		device.enum.api = "udev"
+		device.api = "alsa"
+		api.alsa.path = "hw:0"
+		api.alsa.card = "0"
+		api.alsa.card.name = "SM8250 LPASS"
+		api.alsa.card.longname = "SM8250 LPASS"
+		device.plugged.usec = "4310757"
+		device.bus_path = "platform-sound"
+		sysfs.path = "/devices/platform/sound/sound/card0"
+		device.subsystem = "sound"
+		device.form_factor = "internal"
+		device.name = "alsa_card.platform-sound"
+		device.nick = "SM8250 LPASS"
+		device.icon_name = "audio-card-analog"
+		api.alsa.use-acp = "true"
+		api.acp.auto-profile = "false"
+		api.acp.auto-port = "false"
+		api.dbus.ReserveDevice1.Priority = "-20"
+		api.alsa.split-enable = "true"
+		api.acp.disable-pro-audio = "true"
+		device.routes.default-sink-volume = "0.6"
+		device.routes.default-source-volume = "1.0"
+		api.dbus.ReserveDevice1 = "Audio0"
+		spa.object.id = "2"
+		object.path = "alsa:acp:LPASS"
+		alsa.card = "0"
+		alsa.card_name = "SM8250 LPASS"
+		alsa.long_card_name = "SM8250 LPASS"
+		alsa.id = "LPASS"
+		device.string = "0"
+	Ports:
+		[Out] Speaker: Speaker playback (type: Speaker, priority: 100, availability unknown)
+	Active Port: [Out] Speaker
+	Formats:
+		pcm
+
+Sink #475
+	State: SUSPENDED
+	Name: alsa_output.usb-Generic_Wireless_Headset_0000000000000000-00.analog-stereo
+	Description: Wireless Headset Analog Stereo
+	Driver: PipeWire
+	Sample Specification: s24le 2ch 48000Hz
+	Channel Map: front-left,front-right
+	Owner Module: 4294967295
+	Mute: no
+	Volume: front-left: 24373 /  37% / -25.77 dB,   front-right: 24373 /  37% / -25.77 dB
+	        balance 0.00
+	Base Volume: 65536 / 100% / 0.00 dB
+	Monitor Source: alsa_output.usb-Generic_Wireless_Headset_0000000000000000-00.analog-stereo.monitor
+	Latency: 0 usec, configured 0 usec
+	Flags: HARDWARE HW_MUTE_CTRL HW_VOLUME_CTRL DECIBEL_VOLUME LATENCY 
+	Properties:
+		object.path = "alsa:acp:WIRELESS:3:playback"
+		api.alsa.path = "front:1"
+		api.alsa.pcm.card = "1"
+		api.alsa.pcm.stream = "playback"
+		port.group = "playback"
+		device.icon_name = "audio-card-analog"
+		device.bus = "usb"
+		audio.channels = "2"
+		audio.position = "[ FL, FR ]"
+		device.routes = "1"
+		alsa.resolution_bits = "16"
+		alsa.card = "1"
+		alsa.card_name = "Wireless Headset"
+		alsa.long_card_name = "Generic Wireless Headset at usb-xhci-hcd.1.auto-1, full speed"
+		alsa.driver_name = "snd_usb_audio"
+		alsa.mixer_name = "USB Mixer"
+		alsa.components = "USB1234:5678"
+		alsa.id = "WIRELESS"
+		device.api = "alsa"
+		device.class = "sound"
+		alsa.class = "generic"
+		alsa.subclass = "generic-mix"
+		alsa.name = "USB Audio"
+		alsa.subdevice = "0"
+		alsa.subdevice_name = "subdevice #0"
+		alsa.device = "0"
+		alsa.sync.id = "00000000:00000000:00000000:00000000"
+		device.profile.name = "analog-stereo"
+		device.profile.description = "Analog Stereo"
+		card.profile.device = "3"
+		device.id = "193"
+		factory.name = "api.alsa.pcm.sink"
+		node.pause-on-idle = "false"
+		priority.driver = "1109"
+		priority.session = "1109"
+		media.class = "Audio/Sink"
+		node.name = "alsa_output.usb-Generic_Wireless_Headset_0000000000000000-00.analog-stereo"
+		node.nick = "Wireless Headset"
+		device.description = "Wireless Headset"
+		api.alsa.card.name = "Wireless Headset"
+		api.alsa.card.longname = "Generic Wireless Headset at usb-xhci-hcd.1.auto-1, full speed"
+		api.alsa.period-size = "256"
+		api.alsa.headroom = "1024"
+		factory.id = "19"
+		clock.quantum-limit = "8192"
+		client.id = "63"
+		node.driver = "true"
+		node.loop.name = "data-loop.0"
+		library.name = "audioconvert/libspa-audioconvert"
+		object.id = "72"
+		object.serial = "475"
+		device.enum.api = "udev"
+		api.alsa.card = "1"
+		device.plugged.usec = "452567887"
+		device.bus_path = "platform-xhci-hcd.1.auto-usb-0:1:1.0"
+		sysfs.path = "/devices/platform/soc@0/a600000.usb/xhci-hcd.1.auto/usb1/1-1/1-1:1.0/sound/card1"
+		device.bus-id = "usb-Generic_Wireless_Headset_0000000000000000-00"
+		device.subsystem = "sound"
+		device.vendor.id = "0x1234"
+		device.vendor.name = "Generic"
+		device.product.id = "0x5678"
+		device.product.name = "Wireless Headset"
+		device.serial = "Generic_Wireless_Headset_0000000000000000"
+		device.name = "alsa_card.usb-Generic_Wireless_Headset_0000000000000000-00"
+		device.nick = "Wireless Headset"
+		api.alsa.use-acp = "true"
+		api.acp.auto-profile = "false"
+		api.acp.auto-port = "false"
+		api.dbus.ReserveDevice1.Priority = "-20"
+		api.alsa.split-enable = "true"
+		api.dbus.ReserveDevice1 = "Audio1"
+		spa.object.id = "4"
+		device.string = "1"
+	Ports:
+		analog-output: Analog Output (type: Analog, priority: 9900, availability unknown)
+	Active Port: analog-output
+	Formats:
+		pcm
+Sink #44
+	State: SUSPENDED
+	Name: filter-chain-sink
+	Description: Filter Chain Sink
+	Mute: no
+	Volume: front-left: 65536 / 100% / 0.00 dB,   front-right: 65536 / 100% / 0.00 dB
+	Properties:
+		media.class = "Audio/Sink"
+		node.virtual = "true"
+		filter.smart = "true"
+		filter.smart.name = "filter-chain-sink"
+Sink #50
+	State: SUSPENDED
+	Name: echo_cancel_sink
+	Description: Echo-Cancel Sink
+	Mute: no
+	Volume: front-left: 65536 / 100% / 0.00 dB,   front-right: 65536 / 100% / 0.00 dB
+	Properties:
+		media.class = "Audio/Sink"
+		node.virtual = "true"
+		steamos.mic_filter = "true"
+Sink #76
+	State: SUSPENDED
+	Name: alsa_output.platform-sound.HiFi__Speaker__sink
+	Description: Built-in Audio Playback
+	Mute: no
+	Volume: front-left: 37651 /  57% / -14.44 dB,   front-right: 37651 /  57% / -14.44 dB
+	Properties:
+		media.class = "Audio/Sink"
+		device.api = "alsa"
+		device.description = "Built-in Audio"
+Sink #90
+	State: SUSPENDED
+	Name: bluez_output.00_11_22_33_44_55.1
+	Description: Test Earbuds
+	Mute: yes
+	Volume: front-left: 32768 /  50% / -18.06 dB,   front-right: 32768 /  50% / -18.06 dB
+	Properties:
+		media.class = "Audio/Sink"
+		device.api = "bluez5"
+		api.bluez5.profile = "a2dp-sink"
+Sink #91
+	State: SUSPENDED
+	Name: null-sink-test
+	Description: Dummy Output
+	Mute: no
+	Volume: front-left: 65536 / 100% / 0.00 dB,   front-right: 65536 / 100% / 0.00 dB
+	Properties:
+		media.class = "Audio/Sink"
+		factory.name = "support.null-audio-sink"
+		node.virtual = "true"

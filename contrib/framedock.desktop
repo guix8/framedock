@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Frame Dock
+Name[ko]=Frame Dock (성능 패널·색 보정)
+Name[ja]=Frame Dock（性能パネル・色補正）
+Comment=Performance panel and display colour in SteamVR. Launch again while running to show/hide the panel.
+Comment[ko]=SteamVR 안에 성능 패널과 색 보정을 띄웁니다. 실행 중에 한 번 더 실행하면 패널을 보이거나 숨깁니다
+Comment[ja]=SteamVR の中に性能パネルと色補正を出す。常駐中にもう一度起動すると、パネルの表示と非表示を切り替える
+# install.sh replaces the next Exec with the binary's absolute path (Steam may start it without ~/.local/bin in PATH)
+Exec=@BINARY@
+Icon=framedock
+Terminal=false
+Categories=Utility;

@@ -1,0 +1,49 @@
+{
+  "visible": true,
+  "update_check": true,
+  "language": "ja",
+  "attachment": "head",
+  "position": { "x": -0.15, "y": -0.12, "z": -0.5 },
+  "rotation": { "yaw": 0, "pitch": 0, "roll": 0 },
+  "left_wrist": { "x": 0, "y": 0.05, "z": 0.08, "pitch": -90, "yaw": 0, "roll": 0 },
+  "right_wrist": { "x": 0, "y": 0.05, "z": 0.08, "pitch": -90, "yaw": 0, "roll": 0 },
+  "wrist_fade": true,
+  "wrist_fade_end_deg": 75,
+  "clock_format": 24,
+  "width_m": 0.2,
+  "alpha": 0.9,
+  "update_interval_ms": 500,
+  "graph_seconds": 30,
+  "font": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+  "font_bold": "/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc",
+  "thresholds": {
+    "fps_warn_ratio": 0.95,
+    "fps_crit_ratio": 0.75,
+    "frame_warn_ratio": 0.9,
+    "frame_crit_ratio": 1.0,
+    "reproj_warn_pct": 5,
+    "reproj_crit_pct": 20,
+    "temp_warn_c": 70,
+    "temp_crit_c": 80,
+    "battery_warn_pct": 30,
+    "battery_crit_pct": 15,
+    "power_warn_w": 13,
+    "power_crit_w": 16,
+    "cpu_warn_pct": 85,
+    "cpu_crit_pct": 97,
+    "gpu_warn_pct": 85,
+    "gpu_crit_pct": 95,
+    "wifi_warn_dbm": -70,
+    "wifi_crit_dbm": -78,
+    "controller_warn_pct": 20,
+    "controller_crit_pct": 10
+  },
+  "active_profile": "",
+  "layout": {
+    "version": 1,
+    "columns": [
+      [ { "type": "frame" }, { "type": "power" }, { "type": "temp", "compact": true }, { "type": "cpu" } ],
+      [ { "type": "gpu_ram" }, { "type": "network" }, { "type": "battery", "compact": true }, { "type": "general" } ]
+    ]
+  }
+}

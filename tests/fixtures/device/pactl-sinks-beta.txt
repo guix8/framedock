@@ -1,0 +1,171 @@
+# pactl list sinks on the Frame (2026-11-05, SteamOS 0.5.7 beta, PipeWire 1.6.8), the USB headset renamed: the beta puts
+# a loopback in front of the USB card's sink too (alsa_loopback_device.alsa_output.usb-...), the raw one hidden like the speaker's.
+Sink #149
+	State: SUSPENDED
+	Name: alsa_loopback_device.stereo.alsa_output.platform-sound.HiFi__Speaker__sink
+	Description: Built-in Audio Playback
+	Driver: PipeWire
+	Sample Specification: float32le 2ch 48000Hz
+	Channel Map: front-left,front-right
+	Owner Module: 4294967295
+	Mute: no
+	Volume: front-left: 41188 /  63% / -12.10 dB,   front-right: 41188 /  63% / -12.10 dB
+	        balance 0.00
+	Base Volume: 65536 / 100% / 0.00 dB
+	Monitor Source: alsa_loopback_device.stereo.alsa_output.platform-sound.HiFi__Speaker__sink.monitor
+	Latency: 0 usec, configured 0 usec
+	Flags: DECIBEL_VOLUME LATENCY 
+	Properties:
+		device.description = "Built-in Audio"
+		audio.channels = "2"
+		device.id = "68"
+		node.name = "alsa_loopback_device.stereo.alsa_output.platform-sound.HiFi__Speaker__sink"
+		alsa.loopback = "true"
+		priority.session = "801"
+		media.class = "Audio/Sink"
+		audio.position = "[FL FR]"
+		card.profile.device = "0"
+		priority.driver = "801"
+		node.group = "loopback-1851-19"
+		node.link-group = "loopback-1851-19"
+		node.virtual = "true"
+		resample.prefill = "true"
+		resample.disable = "true"
+		media.name = "Built-in Audio Playback input"
+		stream.is-live = "true"
+		node.want-driver = "true"
+		node.autoconnect = "true"
+		port.group = "stream.0"
+		adapt.follower.spa-node = ""
+		object.register = "false"
+		factory.id = "10"
+		clock.quantum-limit = "8192"
+		node.loop.name = "data-loop.0"
+		library.name = "audioconvert/libspa-audioconvert"
+		client.id = "146"
+		object.id = "148"
+		object.serial = "149"
+		node.driver-id = "81"
+		device.enum.api = "udev"
+		device.api = "alsa"
+		api.alsa.path = "hw:0"
+		api.alsa.card = "0"
+		api.alsa.card.name = "SM8250 LPASS"
+		api.alsa.card.longname = "SM8250 LPASS"
+		device.plugged.usec = "4095369"
+		device.bus_path = "platform-sound"
+		sysfs.path = "/devices/platform/sound/sound/card0"
+		device.subsystem = "sound"
+		device.form_factor = "internal"
+		device.name = "alsa_card.platform-sound"
+		device.nick = "SM8250 LPASS"
+		device.icon_name = "audio-card-analog"
+		api.alsa.use-acp = "true"
+		api.acp.auto-profile = "false"
+		api.acp.auto-port = "false"
+		api.dbus.ReserveDevice1.Priority = "-20"
+		api.alsa.split-enable = "true"
+		api.acp.disable-pro-audio = "true"
+		device.routes.default-sink-volume = "0.6"
+		device.routes.default-source-volume = "1.0"
+		api.dbus.ReserveDevice1 = "Audio0"
+		spa.object.id = "2"
+		object.path = "alsa:acp:LPASS"
+		alsa.card = "0"
+		alsa.card_name = "SM8250 LPASS"
+		alsa.long_card_name = "SM8250 LPASS"
+		alsa.driver_name = "lpass_sndcard"
+		alsa.id = "LPASS"
+		device.string = "0"
+	Ports:
+		[Out] Speaker: Speaker playback (type: Speaker, priority: 100, availability unknown)
+	Active Port: [Out] Speaker
+	Formats:
+		pcm
+
+Sink #287
+	State: RUNNING
+	Name: alsa_loopback_device.alsa_output.usb-Generic_Wireless_Headset_0000000000000000-00.analog-stereo
+	Description: Wireless Headset Analog Stereo
+	Driver: PipeWire
+	Sample Specification: float32le 2ch 48000Hz
+	Channel Map: front-left,front-right
+	Owner Module: 4294967295
+	Mute: no
+	Volume: front-left: 9175 /  14% / -51.23 dB,   front-right: 9175 /  14% / -51.23 dB
+	        balance 0.00
+	Base Volume: 65536 / 100% / 0.00 dB
+	Monitor Source: alsa_loopback_device.alsa_output.usb-Generic_Wireless_Headset_0000000000000000-00.analog-stereo.monitor
+	Latency: 0 usec, configured 0 usec
+	Flags: HARDWARE HW_MUTE_CTRL HW_VOLUME_CTRL DECIBEL_VOLUME LATENCY 
+	Properties:
+		node.virtual = "false"
+		device.description = "Wireless Headset"
+		audio.channels = "2"
+		node.name = "alsa_loopback_device.alsa_output.usb-Generic_Wireless_Headset_0000000000000000-00.analog-stereo"
+		device.id = "76"
+		priority.session = "1110"
+		media.class = "Audio/Sink"
+		audio.position = "[ FL, FR ]"
+		card.profile.device = "3"
+		alsa.loopback = "true"
+		node.group = "loopback-1851-15"
+		node.link-group = "loopback-1851-15"
+		resample.prefill = "true"
+		resample.disable = "true"
+		media.name = "Wireless Headset Analog Stereo input"
+		stream.is-live = "true"
+		node.want-driver = "true"
+		node.autoconnect = "true"
+		port.group = "stream.0"
+		adapt.follower.spa-node = ""
+		object.register = "false"
+		factory.id = "10"
+		clock.quantum-limit = "8192"
+		node.loop.name = "data-loop.0"
+		library.name = "audioconvert/libspa-audioconvert"
+		client.id = "136"
+		object.id = "134"
+		object.serial = "287"
+		node.driver-id = "70"
+		device.enum.api = "udev"
+		device.api = "alsa"
+		api.alsa.path = "hw:1"
+		api.alsa.card = "1"
+		api.alsa.card.name = "Wireless Headset"
+		api.alsa.card.longname = "Generic Wireless Headset at usb-xhci-hcd.1.auto-1, full speed"
+		device.plugged.usec = "2582559663"
+		device.bus_path = "platform-xhci-hcd.1.auto-usb-0:1:1.0"
+		sysfs.path = "/devices/platform/soc@0/a600000.usb/xhci-hcd.1.auto/usb1/1-1/1-1:1.0/sound/card1"
+		device.bus-id = "usb-Generic_Wireless_Headset_0000000000000000-00"
+		device.bus = "usb"
+		device.subsystem = "sound"
+		device.vendor.id = "0x1234"
+		device.vendor.name = "Generic"
+		device.product.id = "0x5678"
+		device.product.name = "Wireless Headset"
+		device.serial = "Generic_Wireless_Headset_0000000000000000"
+		device.name = "alsa_card.usb-Generic_Wireless_Headset_0000000000000000-00"
+		device.nick = "Wireless Headset"
+		device.icon_name = "audio-card-analog-usb"
+		api.alsa.use-acp = "true"
+		api.acp.auto-profile = "false"
+		api.acp.auto-port = "false"
+		api.dbus.ReserveDevice1.Priority = "-20"
+		api.alsa.split-enable = "true"
+		api.dbus.ReserveDevice1 = "Audio1"
+		spa.object.id = "4"
+		object.path = "alsa:acp:WIRELESS"
+		alsa.card = "1"
+		alsa.card_name = "Wireless Headset"
+		alsa.long_card_name = "Generic Wireless Headset at usb-xhci-hcd.1.auto-1, full speed"
+		alsa.driver_name = "snd_usb_audio"
+		alsa.mixer_name = "USB Mixer"
+		alsa.components = "USB1234:5678"
+		alsa.id = "WIRELESS"
+		device.string = "1"
+	Ports:
+		analog-output: Analog Output (type: Analog, priority: 9900, availability unknown)
+	Active Port: analog-output
+	Formats:
+		pcm
