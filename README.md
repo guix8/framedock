@@ -75,6 +75,19 @@ sh framedock/contrib/uninstall.sh
 
 Your settings are kept; the script prints the command to delete them.
 
+## Optional: PC helper (render size)
+
+The Frame card shows the size the game renders each eye at, for example `2400×2400`. For a game on the headset this comes from the colour layer (turn it on with `framedockctl enable`). For a game streamed from a PC only SteamVR on the PC knows it, so a small Windows helper reads it from SteamVR's log and Frame Dock asks it during the stream (the size then shows with **PC**). Without the helper nothing is shown there.
+
+Build it with `powershell -ExecutionPolicy Bypass -File pc-helper\build.ps1` (the C# compiler that comes with Windows, no SDK), then on the PC:
+
+```bat
+framedock-pc.exe --install      :: copies itself to %LOCALAPPDATA%\FrameDock, starts at sign-in and now
+framedock-pc.exe --uninstall    :: stops it and removes it
+```
+
+It answers only `GET /render` on TCP port 27463 on your LAN, read-only: the game's app key and render size, nothing else. Windows may ask whether to allow it on private networks; allow it there, or the headset can't reach it.
+
 ## Good to know
 
 - During a game, use the **trigger**, not the grip, to grab panels. Some games keep the grip to themselves.
@@ -82,7 +95,7 @@ Your settings are kept; the script prints the command to delete them.
 - **Google sign-in** may be refused in the browser. On the Browser settings page, set **Runs as** to **Window**, sign in, then set it back to **No window**.
 - DRM video (Netflix and similar) may show black.
 - If the colour correction causes trouble, run `framedockctl disable` over SSH.
-- Frame Dock sends nothing over the network: no telemetry, no update check. The browser goes online like any browser.
+- Frame Dock sends nothing over the internet: no telemetry, no update check. During a PC stream it asks the PC on your LAN for the render size (port 27463, the optional PC helper). The browser goes online like any browser.
 
 <details>
 <summary>Build from source</summary>
