@@ -132,6 +132,7 @@ add_executable(framedock
   ${PERF}/headset/system_metrics.cpp
   ${PERF}/headset/sensor_bridge.cpp
   ${PERF}/headset/render_size.cpp
+  ${PERF}/headset/update_check.cpp
   ${PERF}/headset/process_scan.cpp
   ${PERF}/headset/hide_rules.cpp
   ${PERF}/headset/dump_metrics.cpp
@@ -246,6 +247,9 @@ if(BUILD_TESTING)
   # The Frame card's render size: the PC helper's JSON, vrlink.txt's peers, the layer's file and its staleness rule
   dock_test(render-size SOURCES ${PERF}/tests/render_size_test.cpp ${PERF}/headset/render_size.cpp
              INCLUDES ${PERF}/headset LIBS framecolor-ui PkgConfig::CURL)
+  # The new version notice: the version comparison, GitHub's tag_name, the once-a-day rule, update_check.json
+  dock_test(update-check SOURCES ${PERF}/tests/update_check_test.cpp ${PERF}/headset/update_check.cpp
+             INCLUDES ${PERF}/headset LIBS frame-perf-core PkgConfig::CURL Threads::Threads)
   # Upstream PR #5's readouts: /proc/stat per core, uptime, own cost (pure, fed from perf/tests/fixtures/sensors);
   # the /proc process scan on fixture trees; Hide system (glob, rules file, the default rules vs a Frame's process list)
   dock_test(sensor-math SOURCES ${PERF}/tests/sensor_math_test.cpp ${PERF}/headset/sensor_math.cpp
