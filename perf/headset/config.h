@@ -186,7 +186,7 @@ const char* browserAspectName(BrowserAspect aspect);
  */
 struct Config {
     bool visible = true;            ///< false でパネルを隠す（読み取りと描画も止める）
-    bool updateCheck = true;        ///< "update_check": once a day, ask GitHub for the latest version (update_check.h)
+    bool updateCheck = true;        ///< "update_check": once a day, ask GitHub for the latest version (version_notice.h)
     /// "language": "auto" (the default: Steam's language, systemLanguage()) or "ko" / "en" / "ja". loadConfig
     /// resolves auto into language; a Config made here is Korean until then (tests, previews)
     bool languageAuto = true;

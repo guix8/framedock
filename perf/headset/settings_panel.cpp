@@ -8,7 +8,7 @@
 #include "i18n.h"
 #include "placement.h"
 #include "theme.h"
-#include "update_check.h"  // kReleasesPage
+#include "version_notice.h"  // kReleasesPage
 
 #include <cairo.h>
 
@@ -1359,7 +1359,7 @@ void SettingsPanel::drawFooter(const Pen& pen, const UiText& text, const Autosta
         noteColor = colorPage_->model().state.message.empty() ? kTextMuted : kSuccess;
     } else if (!updateTag_.empty()) {
         // A newer release (2026-11-14): said here only, where to get it with it; nothing is downloaded
-        note = trf(Tx::UpdateAvailable, {updateTag_, update_check::kReleasesPage});
+        note = trf(Tx::UpdateAvailable, {updateTag_, version_notice::kReleasesPage});
         noteColor = kAccent;
         bold = true;
     } else if (page_ == SettingsPage::Browser) {

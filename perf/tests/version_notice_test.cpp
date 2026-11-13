@@ -1,6 +1,6 @@
-// headset/update_check tests: the version comparison, GitHub's tag_name, the once-a-day rule and update_check.json.
+// headset/version_notice tests: the version comparison, GitHub's tag_name, the once-a-day rule and version_check.json.
 // No network: the checker is only built on a state file and polled with the setting off or the tab hidden.
-#include "update_check.h"
+#include "version_notice.h"
 
 #include <unistd.h>
 
@@ -21,7 +21,7 @@ int failures = 0;
         }                                                                        \
     } while (false)
 
-using namespace update_check;
+using namespace version_notice;
 
 void testVersions() {
     Version v;
@@ -86,19 +86,19 @@ void testState() {
     CHECK(!parseState("", back) && !parseState("{}", back) && !parseState(R"({"checked":"x"})", back) &&
           !parseState(R"({"checked":-5})", back) && back.latestTag == "keep");
     CHECK(statePath("/home/u/.config/frame-perf-overlay/config.json") ==
-          "/home/u/.config/frame-perf-overlay/update_check.json");
-    CHECK(statePath("config.json") == "./update_check.json");
+          "/home/u/.config/frame-perf-overlay/version_check.json");
+    CHECK(statePath("config.json") == "./version_check.json");
 }
 
 void testChecker() {
     // Built on a state file: shows what the last check found, without asking (the setting off, or the tab hidden)
-    char base[] = "/tmp/update-check-test-XXXXXX";
+    char base[] = "/tmp/version-notice-test-XXXXXX";
     if (mkdtemp(base) == nullptr) {
         std::printf("FAIL: mkdtemp\n");
         ++failures;
         return;
     }
-    const std::string path = std::string(base) + "/update_check.json";
+    const std::string path = std::string(base) + "/version_check.json";
     const int64_t now = 1'800'000'000;
     {
         std::ofstream(path) << R"({"checked": )" << now - 60 << R"(, "latest": "v0.1.1"})";
@@ -132,6 +132,6 @@ int main() {
         std::printf("%d check(s) failed\n", failures);
         return 1;
     }
-    std::printf("update-check: all checks passed\n");
+    std::printf("version-notice: all checks passed\n");
     return 0;
 }

@@ -1,4 +1,4 @@
-#include "update_check.h"
+#include "version_notice.h"
 
 #include "atomic_file.h"
 #include "json.h"
@@ -11,7 +11,7 @@
 #include <mutex>
 #include <utility>
 
-namespace update_check {
+namespace version_notice {
 
 namespace {
 
@@ -135,7 +135,7 @@ std::string stateToJson(const State& state) {
 
 std::string statePath(const std::string& configPath) {
     const size_t slash = configPath.find_last_of('/');
-    return (slash == std::string::npos ? std::string(".") : configPath.substr(0, slash)) + "/update_check.json";
+    return (slash == std::string::npos ? std::string(".") : configPath.substr(0, slash)) + "/version_check.json";
 }
 
 UpdateChecker::UpdateChecker(std::string statePath, std::string runningVersion)
@@ -184,4 +184,4 @@ void UpdateChecker::save() {
     }
 }
 
-}  // namespace update_check
+}  // namespace version_notice

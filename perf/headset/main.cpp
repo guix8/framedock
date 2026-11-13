@@ -47,7 +47,7 @@
 #include "sensors.h"
 #include "settings_panel.h"
 #include "theme.h"
-#include "update_check.h"
+#include "version_notice.h"
 #include "vr_keyboard.h"
 #include "vr_overlay.h"
 
@@ -365,7 +365,7 @@ void printUsage() {
         "      --thumbnail-png PATH  also write the dashboard thumbnail (same image as the launcher icon)\n"
         "      --thumbnail-size N    side of that thumbnail (default 256)\n"
         "      --preview-quit   draw the \"press again to quit\" state\n"
-        "      --preview-update TAG   draw the new version notice for TAG (e.g. v0.1.1; nothing is asked)\n"
+        "      --preview-new-version TAG   draw the new version notice for TAG (e.g. v0.1.1; nothing is asked)\n"
         "      --preview-autostart S  draw autostart in this state (enabled / disabled / notinstalled / busy / failed)\n"
         "      --preview-page P       placement (default), layout, profiles, color, dock, browser or device\n"
         "      --preview-select C,I   with --preview-page layout: select the card at column C, index I (from 0)\n"
@@ -478,7 +478,7 @@ bool parseOptions(int argc, char** argv, Options& options) {
             }
         } else if (arg == "--preview-quit") {
             options.previewQuit = true;
-        } else if (arg == "--preview-update" && hasNext) {
+        } else if (arg == "--preview-new-version" && hasNext) {
             options.previewUpdate = argv[++i];
         } else if (arg == "--fake-throttle") {
             options.fakeThrottle = true;
@@ -1324,7 +1324,7 @@ int runOverlay(const Options& options) {
     SettingsPanel settings(fonts);
     settings.setRecordOffered(recorder.available());
     // The new version notice (2026-11-14): asks GitHub at most once a day while the tab shows; notify only
-    update_check::UpdateChecker updates(update_check::statePath(options.configPath), FRAMEDOCK_VERSION);
+    version_notice::UpdateChecker updates(version_notice::statePath(options.configPath), FRAMEDOCK_VERSION);
     // The Color page (FrameColor). Its model keeps working while the tab is hidden: auto compare, auto presets
     framecolor::OpenVrColorHost colorHost;
     framecolor::ColorModel colorModel(&colorHost, framecolor::ColorPaths::fromEnvironment());

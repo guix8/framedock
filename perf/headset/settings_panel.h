@@ -280,7 +280,7 @@ public:
     /** @return the page shown */
     SettingsPage page() const { return page_; }
     /**
-     * A newer release (update_check: "v0.1.1"; "" = none), said on the footer's bottom line. Only the dashboard
+     * A newer release (version_notice: "v0.1.1"; "" = none), said on the footer's bottom line. Only the dashboard
      * tab's own panel gets one (no notice on the wrist). @return true if it changed (redraw)
      */
     bool setUpdateNotice(const std::string& tag) {

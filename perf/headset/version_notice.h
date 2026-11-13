@@ -2,7 +2,7 @@
 // the latest release's tag and compare it with this build's version. It only tells: nothing is downloaded or
 // installed. config.json's "update_check" (default on) turns it off.
 //
-// The last check (when, and the tag it got) is kept in update_check.json next to config.json, so a restart doesn't
+// The last check (when, and the tag it got) is kept in version_check.json next to config.json, so a restart doesn't
 // ask again within the day and still shows a newer version it found.
 #pragma once
 
@@ -11,7 +11,7 @@
 #include <string>
 #include <thread>
 
-namespace update_check {
+namespace version_notice {
 
 constexpr const char* kLatestUrl = "https://api.github.com/repos/guix8/framedock/releases/latest";
 /** Where the notice says to get it */
@@ -50,7 +50,7 @@ std::string parseLatestTag(const std::string& body);
  */
 bool checkDue(int64_t nowUnix, int64_t lastUnix);
 
-/** What update_check.json keeps. */
+/** What version_check.json keeps. */
 struct State {
     int64_t checkedUnix = 0;  ///< "checked": the last check (asked, whatever the answer)
     std::string latestTag;    ///< "latest": the tag the last answered check got ("" = none yet)
@@ -60,7 +60,7 @@ struct State {
 bool parseState(const std::string& text, State& state);
 std::string stateToJson(const State& state);
 
-/** @return update_check.json in config.json's folder */
+/** @return version_check.json in config.json's folder */
 std::string statePath(const std::string& configPath);
 
 /** Asks GitHub off the main thread; the main loop polls it. */
@@ -68,7 +68,7 @@ class UpdateChecker {
 public:
     /**
      * Reads the state file. Sets up libcurl: construct on the main thread.
-     * @param statePath update_check.json
+     * @param statePath version_check.json
      * @param runningVersion FRAMEDOCK_VERSION
      */
     UpdateChecker(std::string statePath, std::string runningVersion);
@@ -104,4 +104,4 @@ private:
     void save();
 };
 
-}  // namespace update_check
+}  // namespace version_notice

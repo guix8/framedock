@@ -131,8 +131,9 @@ class DockFilesTests(unittest.TestCase):
         self.assertIn("std::signal(s, compareStopHandler)", bench)
 
     def test_no_updater_left(self):
-        # Perf's self-updater is gone. config.json keeps its "update_check" key (ignored) so the file round-trips,
-        # and install.sh deletes the old frame-update.sh, so only the updater's code is looked for here
+        # Perf's self-updater is gone. config.json's "update_check" key now turns the notify-only new version check
+        # (version_notice.h, 2026-11-14) on and off, and install.sh deletes the old frame-update.sh, so only the
+        # updater's code is looked for here
         self.assertFalse((ROOT / "perf/vendor").exists())
         self.assertFalse((ROOT / "perf/install.sh").exists())
         for path in list((ROOT / "perf/headset").glob("*")) + list((ROOT / "src").glob("*")) + \
