@@ -824,7 +824,7 @@ void SettingsPanel::placeFooterButton(SettingsAction action, double x, double y,
 }
 
 void SettingsPanel::drawSegmented(const Pen& pen, const UiText& text, std::initializer_list<SettingsAction> actions,
-                                  int selected, bool usable) const {
+                                  int selected, bool usable, double size) const {
     std::vector<const Button*> parts;
     for (const SettingsAction action : actions) {
         const Button* b = findButton(action);
@@ -837,7 +837,7 @@ void SettingsPanel::drawSegmented(const Pen& pen, const UiText& text, std::initi
     for (const Button* b : parts) pill.push_back({labelOf(b->action, text), pressed_ == b->action, hover_ == b->action});
     const double x = parts.front()->x;
     drawSegmentedPill(pen, x, parts.front()->y, parts.back()->x + parts.back()->w - x, parts.front()->h, pill, selected,
-                      usable);
+                      usable, size);
 }
 
 void SettingsPanel::drawButton(const Pen& pen, const UiText& text, SettingsAction action, bool selected,
@@ -1300,13 +1300,14 @@ void SettingsPanel::drawFooter(const Pen& pen, const UiText& text, const Autosta
     // The new version check's toggle at the bottom line's right (2026-11-14: the footer row has no room left; the
     // 기기 page's Select buttons are as low)
     const double lineY = kHeight - 24;
-    const double updateH = 42, updateW = 160;
-    const double updateX = kWidth - kPad - updateW, updateY = kHeight - 6 - updateH;
+    const double updateH = 40, updateW = 150;
+    const double updateX = kWidth - kPad - updateW, updateY = kHeight - 8 - updateH;
     const double updateLabelX = updateX - 12 - pen.measure(tr(Tx::UpdateCheckRow), 17, false);
     pen.text(updateLabelX, centerBaseline(updateY, updateH, 17), tr(Tx::UpdateCheckRow), 17, kTextMuted);
     placeFooterButton(SettingsAction::UpdateCheckOn, updateX, updateY, updateW / 2, updateH);
     placeFooterButton(SettingsAction::UpdateCheckOff, updateX + updateW / 2, updateY, updateW / 2, updateH);
-    drawSegmented(pen, text, {SettingsAction::UpdateCheckOn, SettingsAction::UpdateCheckOff}, updateCheck ? 0 : 1, true);
+    drawSegmented(pen, text, {SettingsAction::UpdateCheckOn, SettingsAction::UpdateCheckOff}, updateCheck ? 0 : 1, true,
+                  19);
 
     // The bottom line (one line): autostart failure (red) > switching > an armed quick switch's "tap again" > an armed
     // reset's / 끔's what happens > a Color page error > a profile action's result (a while, on every page) > the

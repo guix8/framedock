@@ -509,7 +509,7 @@ private:
      * @param usable 押せるか（押せないときは枠なし・薄い文字）
      */
     void drawSegmented(const Pen& pen, const UiText& text, std::initializer_list<SettingsAction> actions, int selected,
-                       bool usable) const;
+                       bool usable, double size = 24) const;
 
     /**
      * 1 つのボタン（位置・− / ＋・既定に戻す）を描く。
