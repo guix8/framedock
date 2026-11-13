@@ -46,7 +46,9 @@ namespace FrameDockPc
             Match m = SceneStart.Match(line);
             if (m.Success)
             {
-                ScenePid = int.Parse(m.Groups[1].Value);
+                int pid;
+                if (!int.TryParse(m.Groups[1].Value, out pid)) return;
+                ScenePid = pid;
                 SceneKey = m.Groups[2].Value;
                 Width = Height = 0;  // the new game's textures come next
                 return;
@@ -54,13 +56,14 @@ namespace FrameDockPc
             m = StreamViews.Match(line);
             if (m.Success)
             {
-                streamView = int.Parse(m.Groups[1].Value);
+                int.TryParse(m.Groups[1].Value, out streamView);
                 return;
             }
             m = SwapSet.Match(line);
             if (m.Success && ScenePid != 0)
             {
-                int w = int.Parse(m.Groups[1].Value), h = int.Parse(m.Groups[2].Value);
+                int w, h;
+                if (!int.TryParse(m.Groups[1].Value, out w) || !int.TryParse(m.Groups[2].Value, out h)) return;
                 // Not the game's: SteamVR's tiny placeholders and the stream's own views
                 if (w < 256 || h < 256 || w == streamView) return;
                 Width = w;
@@ -174,7 +177,8 @@ namespace FrameDockPc
         {
             var follower = new Follower(LogPath());
             var listener = new TcpListener(IPAddress.Any, Port);
-            listener.Start();
+            try { listener.Start(); }
+            catch (SocketException) { return; }  // the port is taken: nothing to serve with, and no error box at sign-in
             DateTime nextPoll = DateTime.MinValue;
             while (true)
             {
@@ -202,8 +206,10 @@ namespace FrameDockPc
             NetworkStream stream = client.GetStream();
             var request = new byte[1024];
             int got = 0;
-            // Only the request line matters: read until the end of the headers or 1 KB
-            while (got < request.Length)
+            // Only the request line matters: read until the end of the headers, 1 KB or 2 s in all (one slow client
+            // must not hold up the others: this serves one connection at a time)
+            DateTime deadline = DateTime.UtcNow.AddSeconds(2);
+            while (got < request.Length && DateTime.UtcNow < deadline)
             {
                 int n = stream.Read(request, got, request.Length - got);
                 if (n <= 0) break;

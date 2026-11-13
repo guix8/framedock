@@ -487,8 +487,12 @@ namespace vkBasalt
         {
             // Only the lookup: globalLock isn't recursive, and QueuePresentKHR holds it
             scoped_lock l(globalLock);
-            pLogicalDevice = deviceMap[GetKey(device)].get();
+            auto found = deviceMap.find(GetKey(device));
+            pLogicalDevice = found != deviceMap.end() ? found->second.get() : nullptr;
         }
+        // A device that didn't come through our vkCreateDevice has no next function to call
+        if (pLogicalDevice == nullptr)
+            return VK_ERROR_INITIALIZATION_FAILED;
         VkResult result = pLogicalDevice->vkd.CreateImage(device, pCreateInfo, pAllocator, pImage);
         if (result == VK_SUCCESS && targetProcess)
             noteRenderSize(pCreateInfo);
