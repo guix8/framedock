@@ -95,7 +95,7 @@ It answers only `GET /render` on TCP port 27463 on your LAN, read-only: the game
 - **Google sign-in** may be refused in the browser. On the Browser settings page, set **Runs as** to **Window**, sign in, then set it back to **No window**.
 - DRM video (Netflix and similar) may show black.
 - If the colour correction causes trouble, run `framedockctl disable` over SSH.
-- Frame Dock sends nothing over the internet: no telemetry, no update check. During a PC stream it asks the PC on your LAN for the render size (port 27463, the optional PC helper). The browser goes online like any browser.
+- Frame Dock sends no telemetry. While the settings tab is open it asks GitHub at most once a day for the latest version number and says so if there is a newer one; it never downloads anything. Turn it off with **Check for updates** at the bottom of the tab. During a PC stream it asks the PC on your LAN for the render size (port 27463, the optional PC helper). The browser goes online like any browser.
 
 <details>
 <summary>Build from source</summary>
