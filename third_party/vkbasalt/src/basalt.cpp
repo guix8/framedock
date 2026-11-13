@@ -9,6 +9,10 @@
 #include <memory>
 #include <cstring>
 #include <unistd.h>
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
+#include <sys/stat.h>
 
 #include "util.hpp"
 
@@ -436,6 +440,61 @@ namespace vkBasalt
         return result;
     }
 
+    // FrameColor (2026-11-13): the render size of a standalone game, for Frame Dock's Frame card. A VR game's eye
+    // textures reach vrcompositor as 2D images of two layers imported from external memory (Eleven Table Tennis:
+    // three 2400x2400 OPAQUE_FD images at launch, SteamVR recommending 1728x1728); overlays and dashboards are
+    // one-layer dma-bufs. The latest such image's size goes to $XDG_RUNTIME_DIR/framecolor/render-size as
+    // "W H <unix seconds>" (temp file + rename). Once per created image, never per frame.
+    namespace
+    {
+        void noteRenderSize(const VkImageCreateInfo* ci)
+        {
+            if (ci->imageType != VK_IMAGE_TYPE_2D || ci->arrayLayers != 2 || ci->extent.width < 512
+                || ci->extent.height < 512)
+                return;
+            uint32_t external = 0;
+            for (const VkBaseInStructure* n = static_cast<const VkBaseInStructure*>(ci->pNext); n; n = n->pNext)
+            {
+                if (n->sType == VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO)
+                    external |= reinterpret_cast<const VkExternalMemoryImageCreateInfo*>(n)->handleTypes;
+            }
+            if (external == 0)
+                return;
+            const char* runtime = std::getenv("XDG_RUNTIME_DIR");
+            if (!runtime || !runtime[0])
+                return;
+            const std::string dir  = std::string(runtime) + "/framecolor";
+            const std::string path = dir + "/render-size";
+            const std::string temp = path + ".tmp" + std::to_string(static_cast<int>(getpid()));
+            mkdir(dir.c_str(), 0700);
+            FILE* f = std::fopen(temp.c_str(), "w");
+            if (!f)
+                return;
+            const bool written = std::fprintf(f, "%u %u %lld\n", ci->extent.width, ci->extent.height,
+                                              static_cast<long long>(std::time(nullptr)))
+                                 > 0;
+            if (std::fclose(f) != 0 || !written || std::rename(temp.c_str(), path.c_str()) != 0)
+                std::remove(temp.c_str());
+        }
+    } // namespace
+
+    VKAPI_ATTR VkResult VKAPI_CALL vkBasalt_CreateImage(VkDevice                     device,
+                                                        const VkImageCreateInfo*     pCreateInfo,
+                                                        const VkAllocationCallbacks* pAllocator,
+                                                        VkImage*                     pImage)
+    {
+        LogicalDevice* pLogicalDevice;
+        {
+            // Only the lookup: globalLock isn't recursive, and QueuePresentKHR holds it
+            scoped_lock l(globalLock);
+            pLogicalDevice = deviceMap[GetKey(device)].get();
+        }
+        VkResult result = pLogicalDevice->vkd.CreateImage(device, pCreateInfo, pAllocator, pImage);
+        if (result == VK_SUCCESS && targetProcess)
+            noteRenderSize(pCreateInfo);
+        return result;
+    }
+
     VKAPI_ATTR VkResult VKAPI_CALL vkBasalt_GetSwapchainImagesKHR(VkDevice       device,
                                                                   VkSwapchainKHR swapchain,
                                                                   uint32_t*      pCount,
@@ -740,6 +799,7 @@ extern "C"
     GETPROCADDR(CreateDevice); \
     GETPROCADDR(DestroyDevice); \
     GETPROCADDR(CreateSwapchainKHR); \
+    GETPROCADDR(CreateImage); \
     GETPROCADDR(GetSwapchainImagesKHR); \
     GETPROCADDR(QueuePresentKHR); \
     GETPROCADDR(DestroySwapchainKHR); \
