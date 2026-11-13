@@ -1,9 +1,11 @@
 #pragma once
 // Gaze-following sharpening (2026-11-08): a worker thread that, while enabled, reads SteamVR's eye-tracked
 // foveation centre, maps it to the layer's per-eye panel UV (gaze_map) and publishes it in /dev/shm for the Vulkan
-// layer (third_party/vkbasalt/src/frame_gaze.hpp). While enabled it raises steamvr/eyeTrackingRateMin to 90 Hz (the
-// default 15 Hz gives a point every ~67 ms); it removes that key again when disabled, on exit, and at the next start
-// after a crash (a marker file says the key is ours).
+// layer (third_party/vkbasalt/src/frame_gaze.hpp). While enabled during a PC stream, and through a full fit, it raises
+// steamvr/eyeTrackingRateMin to 90 Hz (the default 15 Hz gives a point every ~67 ms); otherwise standalone it leaves
+// the rate alone, since a standalone game can flicker black with a raised minimum (2026-11-13). It removes that key
+// again when neither holds, when disabled, on exit, and at the next start after a crash (a marker file says the key is
+// ours).
 // Gaze fit (2026-11-09, gaze_fit.h): on request it shows dots fixed to the headset 0.9 m ahead (an overlay of its own,
 // driven from this thread) and measures the gaze at each; a fit is saved to ~/.config/framecolor/gaze-fit.txt and
 // applied. Once there is a fit, straight ahead is measured again (one dot) about 3 s after the headset is put on while

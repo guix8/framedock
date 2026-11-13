@@ -18,6 +18,7 @@
 #include <openvr.h>
 
 #include "../third_party/vkbasalt/src/frame_gaze.hpp"
+#include "auto_profile.h"
 #include "eye_server.h"
 #include "gaze_fit.h"
 #include "gaze_map.h"
@@ -28,6 +29,10 @@ namespace {
 
 constexpr float kRaisedRate = 90.0f;
 constexpr float kDefaultRate = 15.0f;  // the Frame's default (frame_hmd_additional.vrsettings)
+// The rate is raised only while a PC stream runs: a standalone game can flicker black with any raised minimum
+// (Eleven Table Tennis at 60 and 90 Hz, fine at the default, 2026-11-13); streamed games were tested at 90 Hz
+// (Titanfall 2). Checked this often while following
+constexpr auto kStreamCheck = std::chrono::seconds(1);
 // Rewrite an unchanged point this often: the layer drops points older than 200 ms
 constexpr auto kHeartbeat = std::chrono::milliseconds(100);
 
@@ -259,6 +264,9 @@ void GazeFeed::run() {
     DistortionGrid grids[2];
     bool gridFailed = false, wasEnabled = false;
     auto gridRetry = std::chrono::steady_clock::time_point{};
+    StreamingProbe streaming;
+    auto nextStreamCheck = std::chrono::steady_clock::time_point{};
+    bool streamingNow = false, lastWantRaised = false;
     vr::HmdVector2_t last[2]{{{-9, -9}}, {{-9, -9}}};
     bool lastValid = false;
     auto lastWrite = std::chrono::steady_clock::time_point{};
@@ -429,10 +437,25 @@ void GazeFeed::run() {
             continue;
         }
         if (!wasEnabled) {
-            setRate(true);
             smoother.reset();  // nothing carried over from before it was off
             std::fprintf(stderr, "[gaze] following on\n");
             wasEnabled = true;
+            nextStreamCheck = {};  // the rate is decided right away
+        }
+        bool rateCheck = false;
+        if (const auto now = std::chrono::steady_clock::now(); now >= nextStreamCheck) {
+            nextStreamCheck = now + kStreamCheck;
+            streamingNow = streaming.streaming(std::chrono::duration<double>(now.time_since_epoch()).count());
+            rateCheck = true;
+        }
+        // Also through a full fit the user started (on the panel, not mid-game): its 1.7 s per dot would get about a
+        // sixth of the samples at the default. The automatic recenter after putting the headset on runs mid-game, so
+        // it stays at the default when standalone. Set when the wanted rate changes, else once a second (a failed
+        // change is retried then, not on every pass)
+        const bool wantRaised = streamingNow || (fitRun && !fitRun->recenter);
+        if (rateCheck || wantRaised != lastWantRaised) {
+            setRate(wantRaised);
+            lastWantRaised = wantRaised;
         }
         if (gridFailed && std::chrono::steady_clock::now() >= gridRetry) gridFailed = false;  // try again
         if (!gridFailed && (!grids[0].ready() || !grids[1].ready())) {
