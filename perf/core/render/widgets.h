@@ -68,8 +68,10 @@ struct ControlsView {
     bool browserOpen = false;
     // 녹화 (framecorder's recorder; the card is left off the HUD while framecorder isn't installed)
     int recordState = 0;    ///< 0 idle, 1 recording, 2 saving (stopped, finishing), 3 ended by itself, 4 another
-                            ///< framecorder recorder runs (not started)
+                            ///< framecorder recorder runs (not started), 5 clip saved, 6 framecorder's tab said no
     int recordSeconds = 0;  ///< while recording: since it started
+    bool recordClips = false;      ///< framecorder's clips are on: 녹화 | 클립 (else 녹화 alone)
+    bool recordClipUsable = false;  ///< 클립 can be pressed now
     // The button held down now (drawn pressed)
     WidgetType pressedType = WidgetType::None;
     int pressedButton = -1;
@@ -78,7 +80,8 @@ struct ControlsView {
 /** One button of a control, in the same px as the card's top-left given to controlButtons. */
 struct ControlButton {
     int id = 0;  ///< ColorPresets: 0-2 the presets, 3 compare. Volume: 0 mute, 1 −, 2 +. Passthrough: 0 off, 1 mono
-                 ///< (켬 without Camera Switch), 2 colour. Profiles: the profile's index. Browser, Record: 0
+                 ///< (켬 without Camera Switch), 2 colour. Profiles: the profile's index. Browser: 0. Record: 0
+                 ///< 녹화 (start / stop), 1 클립 (framecorder's clips on)
     double x = 0, y = 0, w = 0, h = 0;
     bool usable = true;  ///< pressable (else drawn dim and the press does nothing)
 };

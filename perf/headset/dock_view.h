@@ -6,7 +6,8 @@
 //
 // With framecorder installed the bottom row has 녹화 too (between 브라우저 and 전체): a tap starts or stops a recording,
 // which then shows its time ("● 0:42"); a recorder that ended by itself, or another one running, is said on the note
-// line.
+// line. While framecorder's clips are on and nothing is being recorded, that part is split: 녹화 | 클립 (save the last
+// seconds; "saved" or framecorder's no on the note line).
 //
 // While Chrome runs, 브라우저 shares its third with 끄기 (Chrome 끄기, as the Browser page's): the first tap arms it
 // (a red ring, "한 번 더 누르면 Chrome을 꺼요" on the note line), a second one within SettingsPanel::kQuitConfirmSec asks
@@ -66,10 +67,14 @@ struct DockBattery {
 /** The 녹화 button: framecorder's recorder (framecorder.h). */
 struct DockRecord {
     bool available = false;  ///< framecorder is installed (else no button)
-    int state = 0;           ///< ControlsView::recordState's numbers (0 idle, 1 recording, 2 saving, 3 failed, 4 busy)
+    int state = 0;           ///< ControlsView::recordState's numbers (0 idle, 1 recording, 2 saving, 3 failed, 4 busy,
+                             ///< 5 clip saved, 6 refused)
     int seconds = 0;         ///< while recording
+    bool clips = false;      ///< framecorder's clips are on: 녹화 | 클립
+    bool clipUsable = false;
     bool operator==(const DockRecord& o) const {
-        return available == o.available && state == o.state && seconds == o.seconds;
+        return available == o.available && state == o.state && seconds == o.seconds && clips == o.clips &&
+               clipUsable == o.clipUsable;
     }
 };
 
@@ -88,6 +93,7 @@ struct DockPress {
         QuitChrome,    ///< 끄기 tapped twice: close Chrome
         DeviceChanged, ///< the 소리 · 패스스루 card acted on the DeviceModel (redraw; its actions are queued there)
         ToggleRecord,  ///< 녹화: start or stop the recording
+        SaveClip,      ///< 클립: framecorder saves the last seconds
     };
     Kind kind = Kind::None;
     std::string profileId;
@@ -192,7 +198,8 @@ public:
     /** A spot on the panel that does something, as last drawn. */
     struct Hit {
         enum class Kind {
-            Handle, Profile, Preset, Compare, AutoCompare, Browser, QuitChrome, Record, Full, Quick, Collapse, Done
+            Handle, Profile, Preset, Compare, AutoCompare, Browser, QuitChrome, Record, Clip, Full, Quick, Collapse,
+            Done
         };
         Kind kind;
         int arg;  ///< the quick-switch index, the preset index

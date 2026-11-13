@@ -41,7 +41,7 @@ Steam Frame 用の SteamVR オーバーレイです。性能パネル、ブラ�
 - ヘッドセットのターミナル: Konsole（Steam の設定 → システムで開発者モードをオン）または SSH
 - ブラウザを使うには Flathub の Google Chrome（`flatpak install flathub com.google.Chrome`）
 - モノクロ・カラーのパススルーを使うには [Arcturus Vision Camera](https://store.steampowered.com/app/4103250/) と、動いている Camera Switch
-- 任意: 手首のパネルとドックの録画ボタンを使うには、`~/.local/bin` に入った framecorder（Steam Frame 用の別の録画プログラム）。なければボタンは出ません
+- 任意: 手首のパネルとドックの録画ボタンを使うには、`~/.local/bin` に入った framecorder（Steam Frame 用の別の録画プログラム）。なければボタンは出ません。framecorder のタブが動いていれば録画はそのタブに頼み、framecorder のクリップがオンならクリップ保存ボタンも出ます（タブの `command.json` に対応した framecorder が必要: 今は dev ビルド）
 
 sudo は要りません。すべてホームフォルダーに入ります。
 

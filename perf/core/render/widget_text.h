@@ -114,6 +114,9 @@ struct WidgetText {
     const char* ctlRecordSaving;   ///< stopped, the recorder still finishing the file
     const char* ctlRecordFailed;   ///< the recorder ended by itself
     const char* ctlRecordBusy;     ///< another framecorder recorder runs (its own tab's): not started
+    const char* ctlRecordClip;     ///< 클립: save the last seconds (framecorder's clips on)
+    const char* ctlRecordClipSaved;  ///< framecorder's tab saved the clip
+    const char* ctlRecordRefused;  ///< framecorder's tab said no, or didn't answer
     // Frame's render size (2026-11-13)
     const char* renderPc;  ///< after the size of a streamed game (read from the PC helper)
 };

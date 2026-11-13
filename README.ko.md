@@ -41,7 +41,7 @@ Steam Frame용 SteamVR 오버레이입니다. 성능 패널, 브라우저, 색 �
 - 헤드셋의 터미널: Konsole(Steam 설정 → 시스템에서 개발자 모드를 켭니다) 또는 SSH
 - 브라우저를 쓰려면 Flathub의 Google Chrome(`flatpak install flathub com.google.Chrome`)
 - 흑백·컬러 패스스루를 쓰려면 [Arcturus Vision Camera](https://store.steampowered.com/app/4103250/)와, 실행 중인 Camera Switch
-- 선택: 손목 패널과 도크의 녹화 버튼을 쓰려면 `~/.local/bin`에 설치된 framecorder(Steam Frame용 별도 녹화 프로그램). 없으면 버튼이 나타나지 않습니다
+- 선택: 손목 패널과 도크의 녹화 버튼을 쓰려면 `~/.local/bin`에 설치된 framecorder(Steam Frame용 별도 녹화 프로그램). 없으면 버튼이 나타나지 않습니다. framecorder 탭이 실행 중이면 녹화를 그 탭에 맡기고, framecorder의 클립이 켜져 있으면 클립 저장 버튼도 함께 나옵니다(탭의 `command.json`을 지원하는 framecorder 필요: 지금은 dev 빌드)
 
 sudo는 필요 없습니다. 모든 파일은 홈 폴더에 설치됩니다.
 

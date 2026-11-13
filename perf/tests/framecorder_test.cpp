@@ -1,6 +1,7 @@
 // 녹화 (framecorder.h): ui.conf to the recorder's options, telling the recorder from framecorder's other programs, the
 // search in a made-up /proc, and Recorder against fake recorders (shell scripts in a temporary folder: one that saves
-// on SIGINT, one that ends by itself, one that ignores SIGINT). framecorder itself isn't needed.
+// on SIGINT, one that ends by itself, one that ignores SIGINT), and Recorder with framecorder's tab up: a fake tab
+// (status.json written here, command.json read back) instead of the real one. framecorder itself isn't needed.
 #include "framecorder.h"
 
 #include <sys/stat.h>
@@ -202,6 +203,98 @@ void testRecorder(const std::string& dir) {
     }
 }
 
+/** The fake tab's status.json: the tab as this process (its pid in the made-up /proc) */
+void tabStatus(const std::string& syncDir, const std::string& fields) {
+    const long wall = static_cast<long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                            std::chrono::system_clock::now().time_since_epoch())
+                                            .count());
+    write(syncDir + "/status.json", "{\"pid\":" + std::to_string(::getpid()) + ",\"ready\":true,\"at\":" +
+                                        std::to_string(wall) + "," + fields + "}");
+}
+
+void testParseTabStatus() {
+    // What framecorder's dev build (e7c7bcc) wrote on a Frame, clips on
+    const framecorder::TabStatus s = framecorder::parseTabStatus(
+        "{\"at\":1794579879558,\"clip_ready\":true,\"clips\":60,\"done\":3,\"live_capture\":false,"
+        "\"live_viewers\":0,\"panels\":true,\"pid\":49054,\"ready\":true,\"recorded_ms\":0,\"recording\":false,"
+        "\"result\":\"ok\",\"running\":false}");
+    CHECK(s.read && s.pid == 49054 && s.ready && s.clips && s.clipReady && !s.recording && s.done == 3);
+    CHECK(s.result == "ok" && s.at == 1794579879558ull);
+    // Clips off: null
+    CHECK(!framecorder::parseTabStatus("{\"pid\":7,\"clips\":null}").clips);
+    CHECK(!framecorder::parseTabStatus("").read && !framecorder::parseTabStatus("{\"ready\":true}").read);
+    CHECK(!framecorder::parseTabStatus("{\"pid\":7,").read);  // cut short
+    CHECK(framecorder::tabDir("/home/u/.config/framecorder/ui.conf") == "/home/u/.config/framecorder/sync");
+}
+
+void testTab(const std::string& dir) {
+    const std::string home = dir + "/tabhome", sync = home + "/sync", proc = dir + "/tabproc";
+    for (const std::string& d : {home, sync, proc, proc + "/" + std::to_string(::getpid())}) ::mkdir(d.c_str(), 0700);
+    const std::string conf = home + "/ui.conf";
+    write(conf, "clips=true\n");
+    // Run only when the tab isn't up
+    const std::string spawned = script(dir, "framecorder-tabless", "echo ran > \"$0.ran\"\nexec sleep 30\n");
+    const std::string command = sync + "/command.json";
+
+    tabStatus(sync, "\"recording\":false,\"running\":false,\"clips\":null,\"clip_ready\":false,\"done\":4,"
+                    "\"result\":\"ok\",\"recorded_ms\":0");
+    Recorder r(spawned, conf, proc);
+    CHECK(r.available() && r.state() == State::Idle && !r.clipsOffered() && !r.clip(0));
+
+    // 녹화 asks the tab (one more than its done), nothing is run here; its answer makes it the tab's recording
+    CHECK(r.toggle(10) && r.pid() <= 0);
+    const std::string asked = read(command);
+    CHECK(asked.find("\"id\":5,\"do\":\"record\",\"from\":\"Frame Dock\"") != std::string::npos);
+    CHECK(!r.toggle(10.1));                   // waiting for the answer
+    CHECK(r.nextWake(10.1) <= 10.1 + 0.05);   // looked for soon
+    CHECK(!r.tick(10.2) && r.state() == State::Idle);
+    tabStatus(sync, "\"recording\":true,\"running\":true,\"clips\":null,\"clip_ready\":false,\"done\":5,"
+                    "\"result\":\"ok\",\"recorded_ms\":42000");
+    CHECK(r.tick(10.3) && r.state() == State::Recording && r.elapsedSec(10.3) == 42);
+    CHECK(std::isinf(framecorder::Recorder(dir + "/missing", conf, proc).nextWake(0)));
+
+    // 정지: asked, Saving until the tab says it stopped
+    CHECK(r.toggle(20) && r.state() == State::Saving);
+    CHECK(read(command).find("\"id\":6,\"do\":\"stop\"") != std::string::npos);
+    tabStatus(sync, "\"recording\":false,\"running\":false,\"clips\":null,\"clip_ready\":false,\"done\":6,"
+                    "\"result\":\"ok\",\"recorded_ms\":0");
+    CHECK(r.tick(20.2) && r.state() == State::Idle);
+
+    // A recording started from the tab or a phone shows here too, and its stop there ends it here
+    tabStatus(sync, "\"recording\":true,\"running\":false,\"clips\":null,\"clip_ready\":false,\"done\":6,"
+                    "\"result\":\"ok\",\"recorded_ms\":3000");
+    CHECK(r.tick(30) && r.state() == State::Recording && r.elapsedSec(31) == 4);
+    tabStatus(sync, "\"recording\":false,\"running\":false,\"clips\":null,\"clip_ready\":false,\"done\":6,"
+                    "\"result\":\"ok\",\"recorded_ms\":0");
+    CHECK(r.tick(32) && r.state() == State::Idle);
+
+    // Clips on: 클립 offered; saved, then said for kNoteSec
+    tabStatus(sync, "\"recording\":false,\"running\":false,\"clips\":60,\"clip_ready\":true,\"done\":6,"
+                    "\"result\":\"ok\",\"recorded_ms\":0");
+    CHECK(r.tick(40) && r.clipsOffered() && r.clipUsable());
+    CHECK(r.clip(41) && !r.clipUsable() && read(command).find("\"id\":7,\"do\":\"clip\"") != std::string::npos);
+    tabStatus(sync, "\"recording\":false,\"running\":false,\"clips\":60,\"clip_ready\":true,\"done\":7,"
+                    "\"result\":\"ok\",\"recorded_ms\":0");
+    CHECK(r.tick(41.1) && r.state() == State::ClipSaved && r.clipsOffered());
+    CHECK(!r.tick(41 + Recorder::kNoteSec) && r.tick(41.1 + Recorder::kNoteSec) && r.state() == State::Idle);
+    // The tab says no: Refused
+    CHECK(r.clip(50));
+    tabStatus(sync, "\"recording\":false,\"running\":false,\"clips\":60,\"clip_ready\":true,\"done\":8,"
+                    "\"result\":\"just saved one\",\"recorded_ms\":0");
+    CHECK(r.tick(50.1) && r.state() == State::Refused);
+    // No answer in kAnswerSec: Refused too, and the next press is free again
+    CHECK(r.tick(60) && r.state() == State::Idle && r.clip(60));
+    CHECK(!r.tick(60 + Recorder::kAnswerSec - 0.1) && r.state() == State::Idle);
+    CHECK(r.tick(60 + Recorder::kAnswerSec) && r.state() == State::Refused && r.clipUsable());
+
+    // The tab gone (its pid not running, its status.json left behind): 녹화 runs the recorder itself again
+    ::rmdir((proc + "/" + std::to_string(::getpid())).c_str());
+    CHECK(r.tick(80) && !r.clipsOffered());
+    CHECK(r.toggle(81) && r.state() == State::Recording && r.pid() > 0);
+    for (int i = 0; i < 100 && !exists(spawned + ".ran"); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    CHECK(exists(spawned + ".ran"));
+}
+
 }  // namespace
 
 int main() {
@@ -215,6 +308,8 @@ int main() {
     }
     testFindRecorder(dir);
     testRecorder(dir);
+    testParseTabStatus();
+    testTab(dir);
     const std::string cleanup = std::string("rm -rf '") + dir + "'";
     if (std::system(cleanup.c_str()) != 0) std::printf("(couldn't remove %s)\n", dir);
     if (failures > 0) {

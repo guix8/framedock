@@ -1196,6 +1196,14 @@ void drawControl(const Pen& pen, double x, double y, const WidgetInstance& w, co
                     status = t.ctlRecordBusy;
                     statusColor = kWarn;
                     break;
+                case 5:
+                    status = t.ctlRecordClipSaved;
+                    statusColor = kSuccess;
+                    break;
+                case 6:
+                    status = t.ctlRecordRefused;
+                    statusColor = kWarn;
+                    break;
                 default: break;
             }
             break;
@@ -1260,7 +1268,11 @@ void drawControl(const Pen& pen, double x, double y, const WidgetInstance& w, co
         case WidgetType::Record:
             for (const ControlButton& b : buttons) {
                 const bool recording = v.recordState == 1;
-                ctlButton(pen, b, recording ? t.ctlRecordStop : t.ctlRecordStart, recording, held == b.id);
+                const char* label = b.id == 1   ? t.ctlRecordClip
+                                    : recording ? t.ctlRecordStop
+                                    : v.recordClips ? t.ctlRecord  // half the card: the short word
+                                                    : t.ctlRecordStart;
+                ctlButton(pen, b, label, recording, held == b.id);
             }
             break;
         default: break;
@@ -1281,7 +1293,7 @@ uint64_t controlSignature(const ControlsView* v) {
     const int ints[] = {v->interactive, v->colorAvailable, v->presetInUse, v->comparing, v->compareUsable,
                         v->soundKnown, v->volume, v->muted, v->passthrough, v->monoColorUsable, v->activeProfile,
                         v->armedProfile, v->chromeRunning, v->browserOpen, v->recordState, v->recordSeconds,
-                        static_cast<int>(v->pressedType), v->pressedButton};
+                        v->recordClips, v->recordClipUsable, static_cast<int>(v->pressedType), v->pressedButton};
     mix(ints, sizeof(ints));
     for (const std::string& n : v->presetNames) str(n);
     str(v->outputName);
@@ -1319,8 +1331,14 @@ std::vector<ControlButton> controlButtons(const WidgetInstance& w, const Control
             for (ControlButton& b : out) b.usable = on;
             break;
         case WidgetType::Record:
-            out = buttonRow(x, y, {{0, 1}}, kCtlGap);
-            for (ControlButton& b : out) b.usable = on && v->recordState != 2;  // not while the file is finished
+            if (v != nullptr && v->recordClips) {
+                out = buttonRow(x, y, {{0, 1}, {1, 1}}, kCtlGap);
+            } else {
+                out = buttonRow(x, y, {{0, 1}}, kCtlGap);
+            }
+            for (ControlButton& b : out) {
+                b.usable = on && (b.id == 1 ? v->recordClipUsable : v->recordState != 2);  // not while it's saved
+            }
             break;
         default: break;
     }

@@ -335,6 +335,7 @@ const Row kRows[] = {
      "Goes away once you press the panel · See it again: Dock tab, How to use",
      "パネルを一度押すと消えます · もう一度見るには: ドックのページの「使い方」"},
     {Tx::DockRecord, "녹화", "Record", "録画"},
+    {Tx::DockClip, "클립", "Clip", "クリップ"},
 };
 
 static_assert(std::size(kRows) == static_cast<size_t>(Tx::Count), "one row per key");

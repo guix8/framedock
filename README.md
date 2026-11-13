@@ -41,7 +41,7 @@ The UI is in English, Korean and Japanese and follows Steam's language.
 - A terminal on the headset: Konsole (turn on Developer Mode in Steam Settings → System) or SSH
 - For the browser: Google Chrome from Flathub (`flatpak install flathub com.google.Chrome`)
 - For mono and colour passthrough: [Arcturus Vision Camera](https://store.steampowered.com/app/4103250/) with its Camera Switch running
-- Optional, for the Record control on the wrist panel and the Dock: [framecorder](https://github.com/coah80/framecorder) (a separate recorder for the Steam Frame) installed in `~/.local/bin`. Without it the control doesn't appear
+- Optional, for the Record control on the wrist panel and the Dock: [framecorder](https://github.com/coah80/framecorder) (a separate recorder for the Steam Frame) installed in `~/.local/bin`. Without it the control doesn't appear. While framecorder's own tab runs, Record goes through it, and with its clips on the control also offers Clip now (needs a framecorder with its tab's `command.json`: its dev build for now)
 
 No sudo is needed. Everything goes into your home folder.
 

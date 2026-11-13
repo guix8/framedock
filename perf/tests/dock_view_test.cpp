@@ -527,6 +527,34 @@ void testQuickView() {
     rig.dock.setRecord(record);
     rig.render();
     CHECK(rig.dock.hitCenter(Kind::Browser, 0, bx, by) && rig.dock.hitCenter(Kind::Record, 0, x, y) && bx < x);
+    // framecorder's clips on: 녹화 | 클립 in the same part (전체 where it was), 클립 dim until a clip can be saved
+    CHECK(!rig.dock.hitCenter(Kind::Clip, 0, x, y));
+    double wholeX = 0, cx = 0, cy = 0;
+    rig.dock.hitCenter(Kind::Record, 0, wholeX, y);
+    double fullX = 0;
+    rig.dock.hitCenter(Kind::Full, 0, fullX, fy);
+    record.clips = true;
+    CHECK(rig.dock.setRecord(record));
+    rig.render();
+    CHECK(rig.dock.hitCenter(Kind::Record, 0, x, y) && !rig.dock.hitCenter(Kind::Clip, 0, cx, cy));
+    record.clipUsable = true;
+    CHECK(rig.dock.setRecord(record));
+    rig.render();
+    double fullAfter = 0;
+    CHECK(rig.dock.hitCenter(Kind::Clip, 0, cx, cy) && rig.dock.hitCenter(Kind::Full, 0, fullAfter, fy));
+    CHECK(x < wholeX && wholeX < cx && cx < fullAfter && fullAfter == fullX && cy == y);
+    const std::string clips = pngPath("dock-quick-record-clips.png");
+    if (!clips.empty()) CHECK(rig.dock.writePng(clips));
+    CHECK(rig.tap(Kind::Clip, 0).kind == DockPress::Kind::SaveClip);
+    CHECK(rig.tap(Kind::Record, 0).kind == DockPress::Kind::ToggleRecord);
+    record.state = 5;
+    rig.dock.setRecord(record);
+    rig.render();
+    CHECK(rig.dock.note() == "클립을 저장했어요");
+    record.state = 6;
+    rig.dock.setRecord(record);
+    rig.render();
+    CHECK(rig.dock.note() == "framecorder가 하지 못했어요");
 }
 
 // The full view: the bar's buttons (완료 only in a fine-adjust session), the pages under it at the bar's height

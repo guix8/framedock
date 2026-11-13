@@ -357,7 +357,8 @@ void printUsage() {
         "      --fake-wifi D    fake the dongle link (D = signal in dBm, none = not connected, home:D = home Wi-Fi)\n"
         "      --fake-throttle  fake SteamVR throttling the app to half rate (36 fps at 72 Hz, 50%% reprojection)\n"
         "      --preview-record S  draw a Record card (framecorder) in this state: idle (default), recording,\n"
-        "                       saving, failed or busy (made up; nothing is started)\n"
+        "                       saving, failed, busy, clips (framecorder's clips on: Record | Clip now) or\n"
+        "                       clip-saved (made up; nothing is started)\n"
         "  --dump-settings-png PATH  without OpenVR, render the dashboard tab to a PNG and exit\n"
         "      --thumbnail-png PATH  also write the dashboard thumbnail (same image as the launcher icon)\n"
         "      --thumbnail-size N    side of that thumbnail (default 256)\n"
@@ -466,8 +467,10 @@ bool parseOptions(int argc, char** argv, Options& options) {
             options.previewRecord = argv[++i];
             if (options.previewRecord != "idle" && options.previewRecord != "recording" &&
                 options.previewRecord != "saving" && options.previewRecord != "failed" &&
-                options.previewRecord != "busy") {
-                std::fprintf(stderr, "--preview-record must be idle, recording, saving, failed or busy\n");
+                options.previewRecord != "busy" && options.previewRecord != "clips" &&
+                options.previewRecord != "clip-saved") {
+                std::fprintf(stderr,
+                             "--preview-record must be idle, recording, saving, failed, busy, clips or clip-saved\n");
                 return false;
             }
         } else if (arg == "--preview-quit") {
@@ -709,8 +712,11 @@ frame_perf_overlay::ControlsView previewControls(const Config& config, const std
                     : record == "saving"  ? 2
                     : record == "failed"  ? 3
                     : record == "busy"    ? 4
+                    : record == "clip-saved" ? 5
                                           : 0;
     v.recordSeconds = v.recordState == 1 ? 42 : 0;
+    v.recordClips = record == "clips" || record == "clip-saved";
+    v.recordClipUsable = v.recordClips;
     return v;
 }
 
@@ -1792,6 +1798,8 @@ int runOverlay(const Options& options) {
         v.browserOpen = dock.browserOpen();
         v.recordState = static_cast<int>(recorder.state());
         v.recordSeconds = recorder.elapsedSec(t);
+        v.recordClips = recorder.clipsOffered();
+        v.recordClipUsable = recorder.clipUsable();
         v.pressedType = ctlHeldType;
         v.pressedButton = ctlHeldButton;
         controlsView = v;
@@ -1799,6 +1807,12 @@ int runOverlay(const Options& options) {
     /** 녹화 (the HUD's card, the Dock's button): starts or stops framecorder's recorder; both show it at once */
     const auto toggleRecording = [&](double t) {
         if (!recorder.toggle(t)) return;
+        dockDirty = true;
+        nextPanel = std::min(nextPanel, t);
+    };
+    /** 클립 (next to 녹화 while framecorder's clips are on): framecorder's tab saves the last seconds */
+    const auto saveClip = [&](double t) {
+        if (!recorder.clip(t)) return;
         dockDirty = true;
         nextPanel = std::min(nextPanel, t);
     };
@@ -1893,7 +1907,13 @@ int runOverlay(const Options& options) {
                         dock.openBrowser(t);
                     }
                     break;
-                case WidgetType::Record: toggleRecording(t); break;
+                case WidgetType::Record:
+                    if (hit->id == 1) {
+                        saveClip(t);
+                    } else {
+                        toggleRecording(t);
+                    }
+                    break;
                 default: break;
             }
             std::fprintf(stderr, "[controls] %s button %d\n", frame_perf_overlay::widgetName(slot.widget.type),
@@ -2194,6 +2214,7 @@ int runOverlay(const Options& options) {
                 std::fprintf(stderr, "[browser] Closing Chrome (the Dock's 끄기)\n");
                 break;
             case DockPress::Kind::ToggleRecord: toggleRecording(t); break;
+            case DockPress::Kind::SaveClip: saveClip(t); break;
             case DockPress::Kind::None: break;
         }
         syncDockView(t);
@@ -3097,6 +3118,8 @@ int runOverlay(const Options& options) {
             record.available = recorder.available();
             record.state = static_cast<int>(recorder.state());
             record.seconds = recorder.elapsedSec(t);
+            record.clips = recorder.clipsOffered();
+            record.clipUsable = recorder.clipUsable();
             if (dockView.setRecord(record)) dockDirty = true;
         }
         // The Dock panel: drawn only while open and only when something changed (what both panels show sets both

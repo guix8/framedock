@@ -253,9 +253,10 @@ if(BUILD_TESTING)
   dock_test(process-scan SOURCES ${PERF}/tests/process_scan_test.cpp ${PERF}/headset/process_scan.cpp
              ${PERF}/headset/hide_rules.cpp ${PERF}/headset/app_text.cpp
              INCLUDES ${PERF}/headset ${PERF}/core/render LIBS frame-perf-core ARGS ${CMAKE_SOURCE_DIR}/${PERF}/tests/fixtures)
-  # 녹화: framecorder's settings, its process name, the recorder child against fake recorders (shell scripts)
+  # 녹화: framecorder's settings, its process name, the recorder child against fake recorders (shell scripts), its
+  # tab's status.json / command.json against a fake tab
   dock_test(framecorder SOURCES ${PERF}/tests/framecorder_test.cpp ${PERF}/headset/framecorder.cpp
-             INCLUDES ${PERF}/headset)
+             INCLUDES ${PERF}/headset LIBS frame-perf-core)
   dock_test(hide-rules SOURCES ${PERF}/tests/hide_rules_test.cpp ${PERF}/headset/process_scan.cpp
              ${PERF}/headset/hide_rules.cpp ${PERF}/headset/app_text.cpp
              INCLUDES ${PERF}/headset ${PERF}/core/render LIBS frame-perf-core ARGS ${CMAKE_SOURCE_DIR}/${PERF}/tests/fixtures)

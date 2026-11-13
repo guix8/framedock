@@ -257,6 +257,7 @@ enum class Tx {
     GuideFooter,
     // ---- 녹화 (framecorder, when installed) ----
     DockRecord,                    ///< the Dock's button (recording: the elapsed time instead)
+    DockClip,                      ///< next to it while framecorder's clips are on
     Count
 };
 

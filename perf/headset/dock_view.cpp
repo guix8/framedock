@@ -341,8 +341,16 @@ void DockPanel::renderQuick(const ProfilesUiState& profiles, double now) {
         const bool recording = record_.state == 1;
         const std::string label = recording ? frame_perf_overlay::recordElapsedText(record_.seconds)
                                             : std::string(tr(Tx::DockRecord));
-        drawButton(pen, {Hit::Kind::Record, 0, x, kBottomY, restPart, kButtonH, record_.state != 2}, label, recording,
-                   28);
+        if (record_.clips) {
+            const double half = (restPart - kGap) / 2;
+            drawButton(pen, {Hit::Kind::Record, 0, x, kBottomY, half, kButtonH, record_.state != 2}, label, recording,
+                       24);
+            drawButton(pen, {Hit::Kind::Clip, 0, x + half + kGap, kBottomY, half, kButtonH, record_.clipUsable},
+                       tr(Tx::DockClip), false, 24);
+        } else {
+            drawButton(pen, {Hit::Kind::Record, 0, x, kBottomY, restPart, kButtonH, record_.state != 2}, label,
+                       recording, 28);
+        }
         x += restPart + kGap;
     }
     drawButton(pen, {Hit::Kind::Full, 0, x, kBottomY, restPart, kButtonH, true}, tr(Tx::DockFull), false, 28);
@@ -362,8 +370,12 @@ void DockPanel::renderQuick(const ProfilesUiState& profiles, double now) {
     }
     if (record_.available && record_.state >= 2) {  // the recording's news: saving, ended by itself, refused
         const frame_perf_overlay::WidgetText& wt = frame_perf_overlay::widgetText(widgetLanguage(uiLanguage()));
-        note_ = record_.state == 2 ? wt.ctlRecordSaving : record_.state == 3 ? wt.ctlRecordFailed : wt.ctlRecordBusy;
-        noteColor = record_.state == 2 ? kTextMuted : record_.state == 3 ? kDanger : kWarn;
+        note_ = record_.state == 2   ? wt.ctlRecordSaving
+                : record_.state == 3 ? wt.ctlRecordFailed
+                : record_.state == 4 ? wt.ctlRecordBusy
+                : record_.state == 5 ? wt.ctlRecordClipSaved
+                                     : wt.ctlRecordRefused;
+        noteColor = record_.state == 2 ? kTextMuted : record_.state == 3 ? kDanger : record_.state == 5 ? kSuccess : kWarn;
         noteBold = record_.state != 2;
     }
     if (quitArmedUntil_ >= 0) {  // the answer to the tap just made
@@ -454,6 +466,7 @@ DockPress DockPanel::pointerDown(double x, double y, double now) {
             }
             break;
         case Hit::Kind::Record: press.kind = DockPress::Kind::ToggleRecord; break;
+        case Hit::Kind::Clip: press.kind = DockPress::Kind::SaveClip; break;
         case Hit::Kind::Full: press.kind = DockPress::Kind::ShowFull; break;
         case Hit::Kind::Quick: press.kind = DockPress::Kind::ShowQuick; break;
         case Hit::Kind::Collapse: press.kind = DockPress::Kind::Collapse; break;

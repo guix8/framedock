@@ -74,6 +74,7 @@ const WidgetText kJapanese = {
     "プロファイル", "使用中: ", "もう一度押すと切り替えます", "ブラウザ", "ブラウザを開く", "ブラウザを閉じる",
     "Chrome オフ", "Chrome オン", "ゲーム中の操作がオフです", "確認中…", "オン",
     "録画", "録画開始", "停止", "保存中…", "録画が止まりました", "framecorder で録画中です",
+    "クリップ保存", "クリップを保存しました", "framecorder でできませんでした",
     // Frame's render size
     "PC",
 };
@@ -144,6 +145,7 @@ const WidgetText kEnglish = {
     "Profiles", "In use: ", "Press again to switch", "Browser", "Open browser", "Close browser",
     "Chrome off", "Chrome on", "In-game controls are off", "Checking…", "On",
     "Record", "Start recording", "Stop", "Saving…", "Recording stopped", "framecorder is already recording",
+    "Clip now", "Clip saved", "framecorder couldn't do that",
     // Frame's render size
     "PC",
 };
@@ -214,6 +216,7 @@ const WidgetText kKorean = {
     "프로필", "사용 중: ", "한 번 더 누르면 바꿔요", "브라우저", "브라우저 열기", "브라우저 닫기",
     "Chrome 꺼짐", "Chrome 켜짐", "게임 중 조작이 꺼져 있어요", "확인 중…", "켬",
     "녹화", "녹화 시작", "정지", "저장 중…", "녹화가 멈췄어요", "framecorder가 이미 녹화 중이에요",
+    "클립 저장", "클립을 저장했어요", "framecorder가 하지 못했어요",
     // Frame's render size
     "PC",
 };
