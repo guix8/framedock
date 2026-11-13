@@ -47,10 +47,10 @@ sudo는 필요 없습니다. 모든 파일은 홈 폴더에 설치됩니다.
 
 ## 설치
 
-[Releases](https://github.com/guix8/framedock/releases)에서 `framedock-0.1.0-steamframe-aarch64.tar.gz`를 헤드셋으로 받은 뒤 다음을 실행합니다.
+[Releases](https://github.com/guix8/framedock/releases)에서 `framedock-0.1.1-steamframe-aarch64.tar.gz`를 헤드셋으로 받은 뒤 다음을 실행합니다.
 
 ```sh
-tar -xzf framedock-0.1.0-steamframe-aarch64.tar.gz
+tar -xzf framedock-0.1.1-steamframe-aarch64.tar.gz
 sh framedock/contrib/install.sh
 ```
 
@@ -106,7 +106,7 @@ SteamOS에는 컴파일러가 없으므로, glibc가 호스트보다 새롭지 �
 
 ```sh
 cmake -G Ninja -S . -B build && cmake --build build && ctest --test-dir build
-sh contrib/package.sh 0.1.0    # dist/framedock-0.1.0-steamframe-aarch64.tar.gz 를 만듭니다
+sh contrib/package.sh 0.1.1    # dist/framedock-0.1.1-steamframe-aarch64.tar.gz 를 만듭니다
 ```
 
 헤드셋에서 복사한 sysroot로 PC(Linux 또는 WSL)에서 빌드하고 SSH로 옮길 수도 있습니다. [contrib/cross/README.md](contrib/cross/README.md)를 보세요.

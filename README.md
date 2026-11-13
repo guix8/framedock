@@ -47,10 +47,10 @@ No sudo is needed. Everything goes into your home folder.
 
 ## Install
 
-Download `framedock-0.1.0-steamframe-aarch64.tar.gz` from [Releases](https://github.com/guix8/framedock/releases) to the headset, then run:
+Download `framedock-0.1.1-steamframe-aarch64.tar.gz` from [Releases](https://github.com/guix8/framedock/releases) to the headset, then run:
 
 ```sh
-tar -xzf framedock-0.1.0-steamframe-aarch64.tar.gz
+tar -xzf framedock-0.1.1-steamframe-aarch64.tar.gz
 sh framedock/contrib/install.sh
 ```
 
@@ -106,7 +106,7 @@ SteamOS has no compilers, so build in a [distrobox](https://distrobox.it/) conta
 
 ```sh
 cmake -G Ninja -S . -B build && cmake --build build && ctest --test-dir build
-sh contrib/package.sh 0.1.0    # makes dist/framedock-0.1.0-steamframe-aarch64.tar.gz
+sh contrib/package.sh 0.1.1    # makes dist/framedock-0.1.1-steamframe-aarch64.tar.gz
 ```
 
 You can also build on a PC (Linux or WSL) against a sysroot copied from the headset and copy the result over SSH: see [contrib/cross/README.md](contrib/cross/README.md) (in Korean).
