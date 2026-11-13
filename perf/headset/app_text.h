@@ -258,6 +258,9 @@ enum class Tx {
     // ---- 녹화 (framecorder, when installed) ----
     DockRecord,                    ///< the Dock's button (recording: the elapsed time instead)
     DockClip,                      ///< next to it while framecorder's clips are on
+    // ---- The new version notice (update_check.h) ----
+    UpdateCheckRow,                ///< the footer's toggle
+    UpdateAvailable,               ///< "{0}": the tag ("v0.1.1"), "{1}": the Releases page
     Count
 };
 

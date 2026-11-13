@@ -47,6 +47,7 @@
 #include "sensors.h"
 #include "settings_panel.h"
 #include "theme.h"
+#include "update_check.h"
 #include "vr_keyboard.h"
 #include "vr_overlay.h"
 
@@ -224,6 +225,7 @@ struct Options {
     bool secondsGiven = false;
     bool fakeThrottle = false;
     bool previewQuit = false;            ///< --dump-settings-png: draw the "press again to quit" state
+    std::string previewUpdate;           ///< --dump-settings-png: say this tag is out (the new version notice)
     std::string previewColor;            ///< --dump-settings-png --preview-page color: "busy" = the long labels
     std::string previewDevice;           ///< --dump-settings-png --preview-page device: previewDeviceState's variant
     std::string previewRecord;           ///< --dump-png: the 녹화 card's made-up state ("" = idle); the tab's
@@ -363,6 +365,7 @@ void printUsage() {
         "      --thumbnail-png PATH  also write the dashboard thumbnail (same image as the launcher icon)\n"
         "      --thumbnail-size N    side of that thumbnail (default 256)\n"
         "      --preview-quit   draw the \"press again to quit\" state\n"
+        "      --preview-update TAG   draw the new version notice for TAG (e.g. v0.1.1; nothing is asked)\n"
         "      --preview-autostart S  draw autostart in this state (enabled / disabled / notinstalled / busy / failed)\n"
         "      --preview-page P       placement (default), layout, profiles, color, dock, browser or device\n"
         "      --preview-select C,I   with --preview-page layout: select the card at column C, index I (from 0)\n"
@@ -475,6 +478,8 @@ bool parseOptions(int argc, char** argv, Options& options) {
             }
         } else if (arg == "--preview-quit") {
             options.previewQuit = true;
+        } else if (arg == "--preview-update" && hasNext) {
+            options.previewUpdate = argv[++i];
         } else if (arg == "--fake-throttle") {
             options.fakeThrottle = true;
         } else if (arg == "--fake-wifi" && hasNext) {
@@ -856,6 +861,7 @@ int runDumpSettingsPng(const Options& options) {
     loadFonts(fonts, config);
     SettingsPanel panel(fonts);
     if (options.previewQuit) panel.armQuitForPreview();
+    panel.setUpdateNotice(options.previewUpdate);
     panel.setRecordOffered(!options.previewRecord.empty());  // the Layout page's palette as with framecorder
     // The Color page with made-up state: no host (nothing reaches SteamVR) and start() isn't called, so
     // FrameColor's files are neither read nor written
@@ -1317,6 +1323,8 @@ int runOverlay(const Options& options) {
     renderer.setLayout(hudLayout(config.layout));
     SettingsPanel settings(fonts);
     settings.setRecordOffered(recorder.available());
+    // The new version notice (2026-11-14): asks GitHub at most once a day while the tab shows; notify only
+    update_check::UpdateChecker updates(update_check::statePath(options.configPath), FRAMEDOCK_VERSION);
     // The Color page (FrameColor). Its model keeps working while the tab is hidden: auto compare, auto presets
     framecolor::OpenVrColorHost colorHost;
     framecolor::ColorModel colorModel(&colorHost, framecolor::ColorPaths::fromEnvironment());
@@ -2928,6 +2936,8 @@ int runOverlay(const Options& options) {
             }
             if (settingsVisible && !nowVisible) settingsDirty |= settings.pointerLeave();  // cancel a drag or a hold
             settingsVisible = nowVisible;
+            updates.poll(settingsVisible, config.updateCheck, static_cast<int64_t>(std::time(nullptr)));
+            settingsDirty |= settings.setUpdateNotice(updates.newerTag());
             // The Color page's display mode check (a /proc scan) runs only while someone can see the page, or a rule
             // needs it; shown again, its "Now:" line is brought up to date at once
             colorModel.setPageVisible((settingsVisible && settings.page() == SettingsPage::Color) ||

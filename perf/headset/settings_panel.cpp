@@ -8,6 +8,7 @@
 #include "i18n.h"
 #include "placement.h"
 #include "theme.h"
+#include "update_check.h"  // kReleasesPage
 
 #include <cairo.h>
 
@@ -274,6 +275,8 @@ bool applySettingsAction(SettingsAction action, Config& config) {
         case SettingsAction::Clock24: config.clockFormat = 24; break;
         case SettingsAction::Reset: resetDisplaySettings(config); break;
         case SettingsAction::LanguageCycle: nextLanguageChoice(config.languageAuto, config.language); break;
+        case SettingsAction::UpdateCheckOn: config.updateCheck = true; break;
+        case SettingsAction::UpdateCheckOff: config.updateCheck = false; break;
         case SettingsAction::AutostartOn:   // 自動起動は設定ファイルではなく systemd なので呼び出し側で扱う
         case SettingsAction::AutostartOff:
         case SettingsAction::Quit:  // 終了は呼び出し側で扱う
@@ -510,6 +513,8 @@ std::string SettingsPanel::labelOf(SettingsAction action, const UiText& text) co
         case SettingsAction::Quit: return quitArmed_ ? text.quitConfirm : text.quit;
         case SettingsAction::AutostartOn: return text.on;
         case SettingsAction::AutostartOff: return text.off;
+        case SettingsAction::UpdateCheckOn: return text.on;
+        case SettingsAction::UpdateCheckOff: return text.off;
         case SettingsAction::PageLayout: return text.pageLayout;
         case SettingsAction::PagePlacement: return text.pagePlacement;
         case SettingsAction::PageProfiles: return text.pageProfiles;
@@ -1217,7 +1222,8 @@ std::string SettingsPanel::quickProfileId(SettingsAction action) const {
     return i < quickIds_.size() ? quickIds_[i] : std::string();
 }
 
-void SettingsPanel::drawFooter(const Pen& pen, const UiText& text, const AutostartStatus& autostart) {
+void SettingsPanel::drawFooter(const Pen& pen, const UiText& text, const AutostartStatus& autostart,
+                               bool updateCheck) {
     const double y = kFooterY;
     const double labelSize = 20;
     // Right to left: Quit, autostart, then the quick switch takes the rest
@@ -1291,11 +1297,21 @@ void SettingsPanel::drawFooter(const Pen& pen, const UiText& text, const Autosta
     textCentered(pen, quitX + kQuitW / 2, centerBaseline(y, kButtonH, quitSize), quitLabel, quitSize,
                  quitArmed_ ? kOnAccent : kText, true);
 
+    // The new version check's toggle at the bottom line's right (2026-11-14: the footer row has no room left; the
+    // 기기 page's Select buttons are as low)
+    const double lineY = kHeight - 24;
+    const double updateH = 42, updateW = 160;
+    const double updateX = kWidth - kPad - updateW, updateY = kHeight - 6 - updateH;
+    const double updateLabelX = updateX - 12 - pen.measure(tr(Tx::UpdateCheckRow), 17, false);
+    pen.text(updateLabelX, centerBaseline(updateY, updateH, 17), tr(Tx::UpdateCheckRow), 17, kTextMuted);
+    placeFooterButton(SettingsAction::UpdateCheckOn, updateX, updateY, updateW / 2, updateH);
+    placeFooterButton(SettingsAction::UpdateCheckOff, updateX + updateW / 2, updateY, updateW / 2, updateH);
+    drawSegmented(pen, text, {SettingsAction::UpdateCheckOn, SettingsAction::UpdateCheckOff}, updateCheck ? 0 : 1, true);
+
     // The bottom line (one line): autostart failure (red) > switching > an armed quick switch's "tap again" > an armed
     // reset's / 끔's what happens > a Color page error > a profile action's result (a while, on every page) > the
-    // Color page's other messages > no unit > the usual note
-    const double lineY = kHeight - 24;
-    const double maxW = kWidth - kPad * 2;
+    // Color page's other messages > a newer release > no unit > the usual note
+    const double maxW = updateLabelX - 24 - kPad;
     std::string note;
     Color noteColor = kTextMuted;
     bool bold = false;
@@ -1340,6 +1356,11 @@ void SettingsPanel::drawFooter(const Pen& pen, const UiText& text, const Autosta
         // muted
         note = colorNote;
         noteColor = colorPage_->model().state.message.empty() ? kTextMuted : kSuccess;
+    } else if (!updateTag_.empty()) {
+        // A newer release (2026-11-14): said here only, where to get it with it; nothing is downloaded
+        note = trf(Tx::UpdateAvailable, {updateTag_, update_check::kReleasesPage});
+        noteColor = kAccent;
+        bold = true;
     } else if (page_ == SettingsPage::Browser) {
         // Its left card has no room for this under its rows
         note = tr(Tx::BrowserPageNote);
@@ -1597,7 +1618,7 @@ void SettingsPanel::render(const Config& config, const AutostartStatus& autostar
     } else {
         profileDisabled_.clear();  // its buttons are gone with the page (layoutButtons), so nothing to skip
     }
-    drawFooter(pen, t, autostart);
+    drawFooter(pen, t, autostart, config.updateCheck);
     if (page_ == SettingsPage::Layout) editor_.render(pen, t);  // last: a dragged card is drawn over everything
 
     cairo_surface_flush(surface_);

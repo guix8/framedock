@@ -336,6 +336,10 @@ const Row kRows[] = {
      "パネルを一度押すと消えます · もう一度見るには: ドックのページの「使い方」"},
     {Tx::DockRecord, "녹화", "Record", "録画"},
     {Tx::DockClip, "클립", "Clip", "クリップ"},
+    // ---- The new version notice ----
+    {Tx::UpdateCheckRow, "새 버전 확인", "Check for updates", "新しい版の確認"},
+    {Tx::UpdateAvailable, "새 버전({0})이 나왔어요 · 받는 곳: {1}", "New version {0} is available · Get it at {1}",
+     "新しい版 {0} が出ています · 入手先: {1}"},
 };
 
 static_assert(std::size(kRows) == static_cast<size_t>(Tx::Count), "one row per key");

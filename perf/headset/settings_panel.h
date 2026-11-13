@@ -122,6 +122,9 @@ enum class SettingsAction {
     PageDevice,           ///< show the 기기 page (handled inside the panel)
     // The header's language button: auto -> ko -> en -> ja -> auto (nextLanguageChoice), saved at once
     LanguageCycle,
+    // The footer's bottom line, right: the daily new version check (config.updateCheck)
+    UpdateCheckOn,
+    UpdateCheckOff,
 };
 
 /** Which page the dashboard tab shows. */
@@ -277,6 +280,15 @@ public:
     /** @return the page shown */
     SettingsPage page() const { return page_; }
     /**
+     * A newer release (update_check: "v0.1.1"; "" = none), said on the footer's bottom line. Only the dashboard
+     * tab's own panel gets one (no notice on the wrist). @return true if it changed (redraw)
+     */
+    bool setUpdateNotice(const std::string& tag) {
+        if (tag == updateTag_) return false;
+        updateTag_ = tag;
+        return true;
+    }
+    /**
      * This panel is the Dock's full view: 표시 끔 and 게임 중 조작 끔 take a second tap there (they take the Dock away,
      * and only the dashboard tab brings it back). The dashboard tab's own panel leaves this off.
      */
@@ -398,6 +410,7 @@ private:
     };
 
     const FontSet& fonts_;
+    std::string updateTag_;  ///< setUpdateNotice
     cairo_surface_t* surface_ = nullptr;
     cairo_t* cr_ = nullptr;
     std::vector<uint8_t> rgba_;
@@ -580,7 +593,7 @@ private:
      * @param text 言語の表
      * @param autostart 自動起動の今の状態
      */
-    void drawFooter(const Pen& pen, const UiText& text, const AutostartStatus& autostart);
+    void drawFooter(const Pen& pen, const UiText& text, const AutostartStatus& autostart, bool updateCheck);
 
 };
 
