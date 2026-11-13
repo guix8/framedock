@@ -443,14 +443,15 @@ namespace vkBasalt
     // FrameColor (2026-11-13): the render size of a standalone game, for Frame Dock's Frame card. A VR game's eye
     // textures reach vrcompositor as 2D images of two layers imported from external memory (Eleven Table Tennis:
     // three 2400x2400 OPAQUE_FD images at launch, SteamVR recommending 1728x1728); overlays and dashboards are
-    // one-layer dma-bufs. The latest such image's size goes to $XDG_RUNTIME_DIR/framecolor/render-size as
+    // one-layer dma-bufs, and SteamVR's own two-layer images are 512x512 or smaller (seen at start with no game,
+    // 2026-11-14), so 1024 is the floor. The latest such image's size goes to $XDG_RUNTIME_DIR/framecolor/render-size as
     // "W H <unix seconds>" (temp file + rename). Once per created image, never per frame.
     namespace
     {
         void noteRenderSize(const VkImageCreateInfo* ci)
         {
-            if (ci->imageType != VK_IMAGE_TYPE_2D || ci->arrayLayers != 2 || ci->extent.width < 512
-                || ci->extent.height < 512)
+            if (ci->imageType != VK_IMAGE_TYPE_2D || ci->arrayLayers != 2 || ci->extent.width < 1024
+                || ci->extent.height < 1024)
                 return;
             uint32_t external = 0;
             for (const VkBaseInStructure* n = static_cast<const VkBaseInStructure*>(ci->pNext); n; n = n->pNext)
