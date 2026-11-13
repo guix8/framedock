@@ -1,9 +1,15 @@
 #include "sensor_bridge.h"
 
+#include "async_sampler.h"
+#include "render_size.h"
 #include "system_metrics.h"
 #include "vr_overlay.h"
 
+#include <unistd.h>
+
 #include <algorithm>
+#include <chrono>
+#include <cstdlib>
 
 using frame_perf_overlay::Reason;
 using frame_perf_overlay::SourceId;
@@ -24,10 +30,17 @@ std::string batteryStatusString(int64_t code) {
     return "";
 }
 
+std::string envOr(const char* name, const std::string& fallback) {
+    const char* value = std::getenv(name);
+    return value != nullptr && value[0] != '\0' ? value : fallback;
+}
+
 }  // namespace
 
 SensorBridge::SensorBridge(Sensors& sensors, VrOverlay* vr, frame_perf_overlay::MetricStore& store)
     : sensors_(sensors), vr_(vr), store_(store) {}
+
+SensorBridge::~SensorBridge() = default;
 
 std::vector<WidgetType> SensorBridge::allWidgets() {
     return {WidgetType::Frame,   WidgetType::Cpu,  WidgetType::GpuRam,   WidgetType::Power,
@@ -41,6 +54,59 @@ void SensorBridge::registerSources(frame_perf_overlay::Scheduler& scheduler, Asy
     scheduler.addSource(SourceId::Controllers, [this](double now, bool) { readControllers(now); });
     scheduler.addSource(SourceId::Processes, [this](double now, bool resumed) { readProcesses(now, resumed); });
     scheduler.addSource(SourceId::SceneApp, [this](double now, bool) { refreshSceneApp(now); });
+    registerRenderSize(scheduler, sampler);
+}
+
+void SensorBridge::registerRenderSize(frame_perf_overlay::Scheduler& scheduler, AsyncSampler* sampler) {
+    // 2026-11-13: OpenVR is asked on the main thread (the scene app's pid, for the layer's staleness rule); the file
+    // and the LAN request to the PC helper (up to 400 ms per address) on the sampler's thread
+    renderSize_ = std::make_unique<render_size::RenderSizeReader>(
+        envOr("HOME", ""), envOr("XDG_RUNTIME_DIR", "/run/user/" + std::to_string(getuid())));
+    render_size::RenderSizeReader* reader = renderSize_.get();
+    std::atomic<int>* scenePid = &renderScenePid_;
+    AsyncSampler::Read read = [reader, scenePid](SensorSample& s) {
+        const double now =
+            std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        const render_size::Reading r = reader->read(now, scenePid->load());
+        s.renderWidth = r.width;
+        s.renderHeight = r.height;
+        s.renderSource = r.source;
+    };
+    AsyncSampler::Apply apply = [this](const SensorSample& s, double now) { storeRenderSize(s, now); };
+    const auto updateScene = [this] {
+        SceneApp app;
+        const bool haveVr = vr_ != nullptr && vr_->readSceneApp(app);
+        renderNoVr_ = !haveVr;
+        renderScenePid_.store(haveVr && !app.key.empty() ? static_cast<int>(app.pid) : 0);
+    };
+    if (sampler == nullptr) {
+        scheduler.addSource(SourceId::RenderSize, [updateScene, read, apply](double now, bool) {
+            updateScene();
+            SensorSample s;
+            read(s);
+            apply(s, now);
+        });
+        return;
+    }
+    const int key = sampler->add(std::move(read), std::move(apply));
+    scheduler.addSource(SourceId::RenderSize, [updateScene, sampler, key](double, bool) {
+        updateScene();
+        sampler->request(key);
+    });
+}
+
+void SensorBridge::storeRenderSize(const SensorSample& s, double now) {
+    if (s.renderSource == 0) {
+        // Nothing known: no game, a previous game's size, no PC helper. Without OpenVR (and no stream): NoSteamVr
+        const Reason why = renderNoVr_ ? Reason::NoSteamVr : Reason::NotConnected;
+        for (uint16_t id : {metric::kFrameRenderWidth, metric::kFrameRenderHeight, metric::kFrameRenderSource}) {
+            store_.setNa(id, why, now);
+        }
+        return;
+    }
+    store_.setI32(metric::kFrameRenderWidth, s.renderWidth, now);
+    store_.setI32(metric::kFrameRenderHeight, s.renderHeight, now);
+    store_.setEnum(metric::kFrameRenderSource, s.renderSource, now);
 }
 
 void SensorBridge::setProcessOptions(const frame_perf_overlay::Layout& layout) {

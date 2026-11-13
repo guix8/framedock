@@ -74,6 +74,7 @@ enum class SourceId : uint8_t {
     SceneApp,     ///< OpenVR current scene app (also updated on the scene-app event)
     Uptime,       ///< /proc/uptime
     SelfCost,     ///< own CPU time and memory, CPU rails
+    RenderSize,   ///< the scene app's render size: the layer's status file, or the PC helper (render_size.h)
     Count,
 };
 
@@ -122,6 +123,11 @@ constexpr uint16_t kFrameReprojectedPct = 106;
 constexpr uint16_t kFrameDropped = 107;
 constexpr uint16_t kFrameThrottled = 108;  ///< 0 = not throttled, 1 = half rate, 2 = third
 constexpr uint16_t kFrameCount = 109;      ///< frames aggregated since the last read
+// Read from RenderSize (2026-11-13): the size the game renders each eye at. N/A NotConnected when no game is
+// known (no scene app, a stale file, no PC helper), NoSteamVr without OpenVR
+constexpr uint16_t kFrameRenderWidth = 110;   ///< i32, pixels
+constexpr uint16_t kFrameRenderHeight = 111;  ///< i32, pixels
+constexpr uint16_t kFrameRenderSource = 112;  ///< enum, see RenderSource
 // CPU (widget 2)
 constexpr uint16_t kCpuUsagePct = 200;
 constexpr uint16_t kCpuMaxCorePct = 201;
@@ -197,6 +203,9 @@ constexpr uint16_t kSelfCpuPct = 1112;  ///< this app's own CPU, % of one core (
 constexpr uint16_t kSelfRssMib = 1113;
 constexpr uint16_t kSelfPowerW = 1114;  ///< estimate, shown with "≈": own share of busy CPU × CPU rails (apc0-2)
 }  // namespace metric
+
+/** Values of metric::kFrameRenderSource. */
+enum class RenderSource : uint32_t { None = 0, Headset = 1 /**< a standalone game, via the layer */, Pc = 2 /**< a streamed game, via the PC helper */ };
 
 /** Values of metric::kBatteryStatus. */
 enum class BatteryStatus : uint32_t { Unknown = 0, Charging = 1, Discharging = 2, Full = 3, NotCharging = 4 };

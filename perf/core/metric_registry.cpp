@@ -27,6 +27,7 @@ constexpr uint32_t kUptimeMs = 1000;
 constexpr uint32_t kSelfMs = 2000;
 constexpr uint32_t kSceneAppMs = 5000;  // a safety net: the scene-app event updates it at once
 constexpr uint32_t kProcessMs = 2000;   // one /proc scan costs 5-8 ms on the Frame
+constexpr uint32_t kRenderSizeMs = 2000;  // a file, or one LAN request (on the sampler's thread)
 
 const std::vector<MetricDef> kRegistry = {
     // Frame
@@ -40,6 +41,9 @@ const std::vector<MetricDef> kRegistry = {
     {metric::kFrameDropped, "frame.dropped", "", W::Frame, S::FrameTiming, kTick, T::I32},
     {metric::kFrameThrottled, "frame.throttled", "", W::Frame, S::FrameTiming, kTick, T::Enum},
     {metric::kFrameCount, "frame.frames", "", W::Frame, S::FrameTiming, kTick, T::I32},
+    {metric::kFrameRenderWidth, "frame.render_width", "px", W::Frame, S::RenderSize, kRenderSizeMs, T::I32},
+    {metric::kFrameRenderHeight, "frame.render_height", "px", W::Frame, S::RenderSize, kRenderSizeMs, T::I32},
+    {metric::kFrameRenderSource, "frame.render_source", "", W::Frame, S::RenderSize, kRenderSizeMs, T::Enum},
     // CPU
     {metric::kCpuUsagePct, "cpu.usage_pct", "%", W::Cpu, S::CpuLoad, kCpuMs, T::F32},
     {metric::kCpuMaxCorePct, "cpu.max_core_pct", "%", W::Cpu, S::CpuLoad, kCpuMs, T::F32},
@@ -261,6 +265,7 @@ const char* sourceName(SourceId source) {
         case SourceId::SceneApp: return "scene_app";
         case SourceId::Uptime: return "uptime";
         case SourceId::SelfCost: return "self_cost";
+        case SourceId::RenderSize: return "render_size";
         case SourceId::Count: break;
     }
     return "unknown";

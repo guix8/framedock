@@ -131,6 +131,7 @@ add_executable(framedock
   ${PERF}/headset/async_sampler.cpp
   ${PERF}/headset/system_metrics.cpp
   ${PERF}/headset/sensor_bridge.cpp
+  ${PERF}/headset/render_size.cpp
   ${PERF}/headset/process_scan.cpp
   ${PERF}/headset/hide_rules.cpp
   ${PERF}/headset/dump_metrics.cpp
@@ -242,6 +243,9 @@ if(BUILD_TESTING)
              ${PERF}/headset/sensor_math.cpp ${PERF}/headset/system_metrics.cpp ${PERF}/headset/async_sampler.cpp
              ${PERF}/headset/wifi_link.cpp
              INCLUDES ${PERF}/headset LIBS frame-perf-core PkgConfig::LIBNL Threads::Threads)
+  # The Frame card's render size: the PC helper's JSON, vrlink.txt's peers, the layer's file and its staleness rule
+  dock_test(render-size SOURCES ${PERF}/tests/render_size_test.cpp ${PERF}/headset/render_size.cpp
+             INCLUDES ${PERF}/headset LIBS framecolor-ui PkgConfig::CURL)
   # Upstream PR #5's readouts: /proc/stat per core, uptime, own cost (pure, fed from perf/tests/fixtures/sensors);
   # the /proc process scan on fixture trees; Hide system (glob, rules file, the default rules vs a Frame's process list)
   dock_test(sensor-math SOURCES ${PERF}/tests/sensor_math_test.cpp ${PERF}/headset/sensor_math.cpp

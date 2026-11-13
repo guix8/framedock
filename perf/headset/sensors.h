@@ -79,6 +79,10 @@ struct SensorSample {
     double selfCpuPct = kNoValue;        ///< own CPU, % of one core, since the previous readSelfCost()
     double selfRssMiB = kNoValue;
     double selfPowerW = kNoValue;        ///< estimate: own share of busy CPU × CPU rails (apc0-2)
+    // The scene app's render size (render_size.h, 2026-11-13): 0 = not known
+    int renderWidth = 0;
+    int renderHeight = 0;
+    uint32_t renderSource = 0;  ///< a frame_perf_overlay::RenderSource value
 };
 
 /**

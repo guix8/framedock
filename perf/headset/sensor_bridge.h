@@ -10,12 +10,17 @@
 #include "sensors.h"
 #include "widgets.h"
 
+#include <atomic>
+#include <memory>
 #include <vector>
 
 class HideRules;
 class VrOverlay;
 
 class AsyncSampler;
+namespace render_size {
+class RenderSizeReader;
+}
 
 class SensorBridge {
 public:
@@ -25,6 +30,7 @@ public:
      * @param store where values go
      */
     SensorBridge(Sensors& sensors, VrOverlay* vr, frame_perf_overlay::MetricStore& store);
+    ~SensorBridge();
 
     /** Registers one reader per source with the scheduler. */
     /** @param sampler non-null: the slow system sources are read on its thread (registerSystemSources) */
@@ -50,6 +56,9 @@ private:
     ProcessScanner processes_;
     ProcessListOptions processOptions_;
     frame_perf_overlay::ProcessListsView processView_;
+    std::unique_ptr<render_size::RenderSizeReader> renderSize_;
+    std::atomic<int> renderScenePid_ {0};  ///< set on the main thread, read on the sampler's
+    bool renderNoVr_ = false;              ///< main thread
 
     void readFrameTiming(double now);
     void readControllers(double now);
@@ -57,4 +66,7 @@ private:
     void readProcesses(double now, bool resumed);
     /** The SceneApp source's reader (VREvent_SceneApplicationChanged makes it due: Scheduler::requestRead). */
     void refreshSceneApp(double now);
+    /** The RenderSize source: the scene app here (OpenVR, main thread), the rest on the sampler's thread. */
+    void registerRenderSize(frame_perf_overlay::Scheduler& scheduler, AsyncSampler* sampler);
+    void storeRenderSize(const SensorSample& s, double now);
 };
