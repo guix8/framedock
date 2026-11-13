@@ -665,6 +665,12 @@ void testFrameRenderSize() {
                     }
                 }
                 CHECK(graphSame);
+                // Simple A shows it too (2026-11-14), top left
+                const Layout simpleA = oneWidget(inst(W::SimpleA));
+                const Pixels aNone = renderKo(simpleA, frameStore(0), nullptr);
+                const Pixels aSize = renderKo(simpleA, frameStore(source),
+                                              source == 2 ? "simple_a_render_pc.png" : nullptr);
+                CHECK(aSize != aNone);
             }
         }
     }

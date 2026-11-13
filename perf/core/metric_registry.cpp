@@ -141,9 +141,11 @@ const std::vector<MetricDef>& registry() {
 const std::vector<uint16_t>& borrowedMetrics(WidgetType type) {
     using namespace metric;
     // Simple A: app fps / display Hz, reprojection, throttle; CPU % (total shown, coloured by the busiest core); GPU
-    // load, RAM; power; battery %, its state and the time left; the time of day. Their sources: FrameTiming, CpuLoad, Ram, Power,
-    // Battery, Clock. No CPU / GPU clocks, temperatures, network or controllers
+    // load, RAM; power; battery %, its state and the time left; the time of day; the render size. Their sources:
+    // FrameTiming, CpuLoad, Ram, Power, Battery, Clock, RenderSize. No CPU / GPU clocks, temperatures, network or
+    // controllers
     static const std::vector<uint16_t> kSimpleA = {
+        kFrameRenderWidth, kFrameRenderHeight, kFrameRenderSource,
         kFrameAppFps, kFrameDisplayHz, kFrameReprojectedPct, kFrameThrottled, kCpuUsagePct,   kCpuMaxCorePct,
         kGpuBusyPct,  kRamUsedGib,     kRamTotalGib,         kPowerVphW,      kBatteryPct,    kBatteryStatus,
         kBatteryChargerOnline, kBatteryRemainMin, kClock,

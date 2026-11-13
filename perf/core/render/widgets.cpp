@@ -1049,6 +1049,12 @@ void drawSimpleA(const Pen& pen, double x, double y, const WidgetContext& ctx) {
                    colorOf(levelOf(reproj, th.reprojWarnPct, th.reprojCritPct)));
     }
     pen.text(clockRight, y + 38, timeOfDayText(text(ctx, kClock), ctx.clockFormat), 20, kTextMuted, false, true);
+    // The render size (2026-11-14), like the Frame card's: top left, muted, "PC" when the PC helper said it
+    if (ok(ctx, kFrameRenderWidth) && ok(ctx, kFrameRenderHeight)) {
+        std::string size = std::to_string(i(ctx, kFrameRenderWidth)) + "×" + std::to_string(i(ctx, kFrameRenderHeight));
+        if (i(ctx, kFrameRenderSource) == static_cast<int64_t>(RenderSource::Pc)) size += std::string(" ") + t.renderPc;
+        pen.text(x + 14, y + 38, size, 18, kTextMuted);
+    }
     // Row 2: CPU %, GPU % (in the GPU blue), RAM used / total
     double ry = y + kSimpleARow1H + kSimpleAGap;
     // CPU: the number is the total (the approved mockup's "CPU 16%"), the colour the busiest core, which is what
