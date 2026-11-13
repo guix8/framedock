@@ -474,6 +474,13 @@ void drawFrame(const Pen& pen, double x, double y, const WidgetInstance& w, cons
     const auto msLevel = [&](double ms) {
         return levelOf(ms, targetMs * th.frameWarnRatio, targetMs * th.frameCritRatio);
     };
+    // 2026-11-13: the size the game renders each eye at, small on the title row, right-aligned before the graph;
+    // "PC" when the PC helper said it. Nothing while it's N/A
+    if (ok(ctx, kFrameRenderWidth) && ok(ctx, kFrameRenderHeight)) {
+        std::string size = std::to_string(i(ctx, kFrameRenderWidth)) + "×" + std::to_string(i(ctx, kFrameRenderHeight));
+        if (i(ctx, kFrameRenderSource) == static_cast<int64_t>(RenderSource::Pc)) size += std::string(" ") + t.renderPc;
+        pen.text(x + kGraphX - 8, top + 17, size, 13, kTextMuted, false, true);
+    }
     if (!ok(ctx, kFrameAppFps)) {
         drawBigValue(pen, cx, top + 52, "--", "fps", kTextMuted);
         const Reason why = reasonOf(ctx, kFrameAppFps);

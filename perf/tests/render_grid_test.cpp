@@ -617,6 +617,59 @@ Pixels renderKo(const Layout& layout, const MetricStore& store, const char* pngN
     return renderer.toRgba();
 }
 
+/** Frame's render size (2026-11-13): drawn on the title row, left of the graph, nothing when N/A. */
+void testFrameRenderSize() {
+    const auto frameStore = [](int source) {
+        MetricStore st;
+        st.setF32(metric::kFrameAppFps, 90, kNow);
+        st.setF32(metric::kFrameDisplayHz, 90, kNow);
+        st.setF32(metric::kFrameGpuMs, 8.2, kNow);
+        st.setF32(metric::kFrameCpuMs, 4.1, kNow);
+        st.setF32(metric::kFrameReprojectedPct, 0, kNow);
+        st.setI32(metric::kFrameDropped, 0, kNow);
+        if (source == 0) {
+            for (uint16_t id : {metric::kFrameRenderWidth, metric::kFrameRenderHeight, metric::kFrameRenderSource}) {
+                st.setNa(id, Reason::NotConnected, kNow);
+            }
+        } else {
+            st.setI32(metric::kFrameRenderWidth, 3048, kNow);
+            st.setI32(metric::kFrameRenderHeight, 3048, kNow);
+            st.setEnum(metric::kFrameRenderSource, static_cast<uint32_t>(source), kNow);
+        }
+        return st;
+    };
+    const Layout frame = oneWidget(inst(W::Frame));
+    int width = 0;
+    const Pixels none = renderKo(frame, frameStore(0), "frame_render_none.png", &width);
+    for (const WidgetLanguage language : {WidgetLanguage::Ko, WidgetLanguage::En, WidgetLanguage::Ja}) {
+        for (const int source : {1, 2}) {
+            GridRenderer renderer(fonts());
+            renderer.setLayout(frame);
+            const MetricStore st = frameStore(source);
+            WidgetContext ctx;
+            ctx.store = &st;
+            ctx.now = kNow;
+            ctx.language = language;
+            renderer.render(ctx);
+            if (language == WidgetLanguage::Ko && source == 2) renderer.writePng(pngDir() + "/frame_render_pc.png");
+            const Pixels px = renderer.toRgba();
+            CHECK(px != none || language != WidgetLanguage::Ko);
+            // The graph (from the card's x 202 on) is untouched: the size stays in the text column
+            if (language == WidgetLanguage::Ko) {
+                const int height = static_cast<int>(px.size() / 4 / width);
+                bool graphSame = true;
+                for (int y = 0; y < height; ++y) {
+                    for (int x = 8 + 202 - 2; x < width; ++x) {
+                        const size_t k = (static_cast<size_t>(y) * width + x) * 4;
+                        for (int c = 0; c < 4; ++c) graphSame = graphSame && px[k + c] == none[k + c];
+                    }
+                }
+                CHECK(graphSame);
+            }
+        }
+    }
+}
+
 unsigned rgbOf(const Pixels& px, int width, int x, int y) {
     const size_t i = (static_cast<size_t>(y) * width + x) * 4;
     return (unsigned(px[i]) << 16) | (unsigned(px[i + 1]) << 8) | px[i + 2];
@@ -1232,6 +1285,7 @@ int main() {
     testSimpleTemplates();
     testHighlight();
     testControls();
+    testFrameRenderSize();
     if (failures == 0) std::printf("render-grid-test: all passed\n");
     return failures == 0 ? 0 : 1;
 }
