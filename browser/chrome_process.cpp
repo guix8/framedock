@@ -100,6 +100,39 @@ std::string acceptLanguages(const std::string& locale) {
     return list;
 }
 
+/**
+ * Chrome takes only the last --enable-features= (and --disable-features=): one from the command, ours and one from
+ * extra_args are joined into the first one's place, each feature once, so none of them is lost.
+ */
+static void mergeFeatureSwitches(std::vector<std::string>& argv) {
+    for (const std::string prefix : {"--enable-features=", "--disable-features="}) {
+        size_t first = argv.size();
+        std::vector<std::string> features;
+        for (size_t i = 0; i < argv.size();) {
+            if (argv[i].rfind(prefix, 0) != 0) {
+                ++i;
+                continue;
+            }
+            std::string list = argv[i].substr(prefix.size());
+            for (size_t at = 0; at <= list.size();) {
+                const size_t comma = std::min(list.find(',', at), list.size());
+                const std::string f = list.substr(at, comma - at);
+                if (!f.empty() && std::find(features.begin(), features.end(), f) == features.end()) features.push_back(f);
+                at = comma + 1;
+            }
+            if (first == argv.size()) {
+                first = i++;
+            } else {
+                argv.erase(argv.begin() + static_cast<std::ptrdiff_t>(i));
+            }
+        }
+        if (first == argv.size()) continue;
+        std::string joined;
+        for (const std::string& f : features) joined += (joined.empty() ? "" : ",") + f;
+        argv[first] = prefix + joined;
+    }
+}
+
 std::vector<std::string> chromeArgv(const ChromeLaunch& launch) {
     std::vector<std::string> argv;
     if (isFlatpakRun(launch.command)) {
@@ -146,10 +179,21 @@ std::vector<std::string> chromeArgv(const ChromeLaunch& launch) {
         // The screen is the page's size too (headless Chrome's own is 800×600): a page gone fullscreen (YouTube's ⛶)
         // takes the screen, and with a smaller one the panel showed only its top left, enlarged
         argv.push_back("--screen-info={0,0 " + std::to_string(launch.width) + "x" + std::to_string(launch.height) + "}");
+        // The GPU (headless Chrome draws and decodes on the CPU otherwise). Measured on the headset 2026-11-15, YouTube
+        // 720p H.264 on the 1280×720 page: without these the compositor thread sat at 84% of a core and 38% of the
+        // video's frames were dropped (Chrome 136% CPU); with them, ANGLE on Vulkan (Turnip, Adreno 750): GPU
+        // compositing, raster and video decode on, 0% dropped, Chrome 70% CPU and 2.6% of the GPU's time.
+        // An --enable-features from the command or extra_args is joined with this one (mergeFeatureSwitches)
+        argv.push_back("--enable-gpu");
+        argv.push_back("--use-gl=angle");
+        argv.push_back("--use-angle=vulkan");
+        argv.push_back("--enable-features=Vulkan,VulkanFromANGLE,DefaultANGLEVulkan");
+        argv.push_back("--ignore-gpu-blocklist");
     } else {
         argv.push_back("--window-position=-32000,-32000");
     }
     argv.insert(argv.end(), launch.extraArgs.begin(), launch.extraArgs.end());
+    mergeFeatureSwitches(argv);
     argv.push_back("about:blank");
     return argv;
 }

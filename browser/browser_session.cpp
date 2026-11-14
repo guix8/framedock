@@ -96,6 +96,31 @@ std::string zoomScript(int pct) {
            "};a();document.addEventListener('readystatechange',a)})()";
 }
 
+/**
+ * YouTube, on every document: H.264 instead of VP9 / AV1, and no more than the page's height (720p / 1080p).
+ * Measured 2026-11-15 when headless Chrome still ran on the CPU (no GPU flags yet, video_decode disabled_software):
+ * a 1080p video on the 1280×720 page dropped 52% of its frames, 720p H.264 38%. The GPU flags (chromeArgv) then took
+ * that to 0%; H.264 stays as the lighter decode in case Chrome falls back to the CPU (no Vulkan driver).
+ * Saying no to VP9 / AV1 in MediaSource.isTypeSupported and canPlayType makes YouTube send H.264 (what the h264ify
+ * extension does). Other sites are left alone, and so are YouTube players embedded in them (a cross-site iframe is
+ * its own target, which this page's session doesn't reach).
+ */
+std::string youtubeMediaScript(int pageHeight) {
+    const std::string top = pageHeight >= 1080 ? "hd1080" : "hd720";
+    return "(()=>{if(!/(^|\\.)youtube\\.com$/.test(location.hostname)||window.__framedockMedia)return;"
+           "window.__framedockMedia=1;"
+           "if(window.MediaSource){const ok=MediaSource.isTypeSupported.bind(MediaSource);"
+           "MediaSource.isTypeSupported=t=>/vp0?9|av01/i.test(String(t))?false:ok(t)}"
+           "if(window.HTMLMediaElement){const can=HTMLMediaElement.prototype.canPlayType;"
+           "HTMLMediaElement.prototype.canPlayType=function(t){return /vp0?9|av01/i.test(String(t))?'':"
+           "can.call(this,t)}}"
+           "const cap=()=>{const p=document.getElementById('movie_player')||"
+           "document.querySelector('.html5-video-player');"
+           "if(p&&p.setPlaybackQualityRange)try{p.setPlaybackQualityRange('tiny','" + top + "')}catch(e){}};"
+           "document.addEventListener('loadedmetadata',cap,true);"
+           "document.addEventListener('yt-navigate-finish',cap)})()";
+}
+
 /** A phone's user agent made from the desktop one (the same Chrome version) */
 std::string mobileUserAgent(const std::string& desktop) {
     std::string ua = desktop.empty()
@@ -1054,6 +1079,10 @@ void BrowserSession::pageReady(double now) {
          cdp::metricsParams(options_.launch.width, options_.launch.height, options_.mobile), true, Pending::Metrics);
     zoomScriptId_.clear();  // a fresh session: none of ours yet
     zoomScriptRequest_ = 0;
+    // YouTube's video: H.264 and at most the page's height, from the next document on (a page already open keeps
+    // what it chose; the script marks itself, so a second session on the page doesn't run it twice)
+    send("Page.addScriptToEvaluateOnNewDocument",
+         "{\"source\":" + jsonString(youtubeMediaScript(options_.launch.height)) + "}", true);
     translate_ = Translate::Off;
     status_.translated = false;
     applyView(true);

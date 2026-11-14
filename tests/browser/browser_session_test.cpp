@@ -250,6 +250,11 @@ void testViewAndTranslate() {
     s.setVisible(true, now());
     s.navigate("youtube.com");
     CHECK(pump(s, [&] { return s.status().url == "https://youtube.com"; }, 2));
+    // YouTube's H.264 / 720p script goes on every document from the attach on
+    CHECK(pump(s, [&] {
+        const std::string media = fakeLog(o);
+        return media.find("isTypeSupported") != std::string::npos && media.find("'tiny','hd720'") != std::string::npos;
+    }, 2));
     o.mobile = true;
     s.setOptions(o, now());
     pumpFor(s, 0.2);
@@ -336,6 +341,7 @@ void testPageSizeRestarts() {
     CHECK(gone(before));
     CHECK(logged.find("starting Chrome again so its screen matches") != std::string::npos);
     CHECK(pump(s, [&] { return s.status().url == "https://youtube.com"; }, 3));
+    CHECK(pump(s, [&] { return fakeLog(o).find("'tiny','hd1080'") != std::string::npos; }, 2));  // the cap follows the height
     // Chrome 끄기 while that restart is under way: it stays off
     o.launch.width = 1280;
     o.launch.height = 720;
@@ -1382,6 +1388,25 @@ void testArgv() {
     CHECK(has("--headless=new"));
     CHECK(has("--window-size=1280,720"));
     CHECK(has("--screen-info={0,0 1280x720}"));  // fullscreen takes the page's size, not headless Chrome's 800×600
+    // Headless draws and decodes on the GPU (ANGLE on Vulkan), not the CPU
+    CHECK(has("--enable-gpu") && has("--use-gl=angle") && has("--use-angle=vulkan") && has("--ignore-gpu-blocklist"));
+    CHECK(has("--enable-features=Vulkan,VulkanFromANGLE,DefaultANGLEVulkan"));
+    // Chrome keeps only the last --enable-/--disable-features: the command's, ours and extra_args' become one each
+    ChromeLaunch merged = l;
+    merged.command = splitCommand("/usr/bin/chromium --enable-features=VaapiVideoDecoder,Vulkan");
+    merged.extraArgs = {"--enable-features=AcceleratedVideoDecodeLinuxGL", "--disable-features=Foo,Translate"};
+    const std::vector<std::string> m = chromeArgv(merged);
+    const auto count = [&](const char* prefix) {
+        return std::count_if(m.begin(), m.end(), [&](const std::string& s) { return s.rfind(prefix, 0) == 0; });
+    };
+    CHECK(count("--enable-features=") == 1 && count("--disable-features=") == 1);
+    CHECK(m[1] == "--enable-features=VaapiVideoDecoder,Vulkan,VulkanFromANGLE,DefaultANGLEVulkan,"
+                  "AcceleratedVideoDecodeLinuxGL");
+    CHECK(std::any_of(m.begin(), m.end(), [](const std::string& s) {
+        return s.rfind("--disable-features=Translate,MediaRouter,", 0) == 0 && s.size() > 4 &&
+               s.compare(s.size() - 4, 4, ",Foo") == 0;
+    }));
+    CHECK(m.back() == "about:blank");
     CHECK(!has("--mute-audio"));
     CHECK(has("--disable-blink-features=AutomationControlled"));  // navigator.webdriver false
     CHECK(has("--disk-cache-size=67108864"));  // the HTTP cache capped
@@ -1414,6 +1439,7 @@ void testArgv() {
     const std::vector<std::string> b = chromeArgv(l);
     CHECK(b[0] == "/usr/bin/chromium" && b[1] == "--enable-features=VaapiVideoDecoder");
     CHECK(std::find(b.begin(), b.end(), "--headless=new") == b.end());
+    CHECK(std::find(b.begin(), b.end(), "--use-angle=vulkan") == b.end());  // a windowed Chrome picks its own GPU path
     CHECK(std::find(b.begin(), b.end(), "--window-position=-32000,-32000") != b.end());
     CHECK(std::find(b.begin(), b.end(), "--ignore-gpu-blocklist") != b.end());
     CHECK(std::find(b.begin(), b.end(), "--die-with-parent") == b.end());
