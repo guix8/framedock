@@ -17,7 +17,7 @@ namespace frame_perf_overlay {
 /**
  * Widget types. Stable: they go into saved layouts. Numbers without a widget yet (10, 12, 13) are reserved, never
  * reused. 7 and 8 are upstream's (PR #5, ported); 14 and 15 are Frame Dock's own (the simple templates), past
- * upstream's numbers.
+ * upstream's numbers, and so is 22 (after the controls, which took 16-21).
  */
 enum class WidgetType : uint8_t {
     None = 0,
@@ -40,10 +40,11 @@ enum class WidgetType : uint8_t {
     Profiles = 19,      ///< 프로필: the first four profiles
     Browser = 20,       ///< 브라우저: open or close the browser panel
     Record = 21,        ///< 녹화: start or stop a framecorder recording (only while framecorder is installed)
+    PcStream = 22,  ///< Frame Dock: a PC stream in detail (the game's fps and frame times on the PC, the PC's load, the link)
 };
 
 /** Number of WidgetType values including None and the reserved gaps (for arrays indexed by type). */
-constexpr size_t kWidgetTypeCount = 22;
+constexpr size_t kWidgetTypeCount = 23;
 
 /** @return true for the controls (ColorPresets…Record): buttons, nothing read */
 constexpr bool isControlWidget(WidgetType type) {
@@ -249,8 +250,8 @@ const std::vector<MetricDef>& registry();
 const MetricDef* findMetric(uint16_t id);
 
 /**
- * The metrics a widget shows without owning them. The simple templates (SimpleA, SimpleB) show readings the other
- * widgets own, so they own none: the scheduler reads a borrowed metric's source for them (and only that source),
+ * The metrics a widget shows without owning them. The simple templates (SimpleA, SimpleB) and the PC stream card
+ * show readings the other widgets own, so they own none: the scheduler reads a borrowed metric's source for them (and only that source),
  * and their redraws follow those metrics. Every other widget borrows nothing.
  * @param type a widget type
  * @return metric ids (static storage; empty for most types)

@@ -1027,6 +1027,150 @@ void testSimpleStream() {
     }
 }
 
+/**
+ * Renders `frames` updates one second apart, the last at kNow, so the graphs hold a line; store(i, t) gives update
+ * i's values, sampled at t. Writes pngName for a look by eye.
+ */
+template <typename MakeStore>
+Pixels renderLive(const Layout& layout, WidgetLanguage language, int frames, MakeStore store, const std::string& pngName,
+                  int* height = nullptr) {
+    GridRenderer renderer(fonts());
+    renderer.setLayout(layout);
+    for (int i = 0; i < frames; ++i) {
+        const double t = kNow - (frames - 1 - i);
+        const MetricStore st = store(i, t);
+        WidgetContext ctx;
+        ctx.store = &st;
+        ctx.now = t;
+        ctx.language = language;
+        renderer.render(ctx);
+    }
+    if (!pngName.empty()) renderer.writePng(pngDir() + "/" + pngName);
+    if (height != nullptr) *height = renderer.geometry().textureHeight;
+    return renderer.toRgba();
+}
+
+/** streamStore(Helper) as a game whose fps and frame times move (update i of a live render) */
+MetricStore liveStreamStore(int i, double t) {
+    MetricStore st = streamStore(StreamState::Helper, t);
+    st.setF32(metric::kPcFps, 60 + 25 * std::sin(i * 0.5), t);
+    st.setF32(metric::kPcGpuMaxMs, 9.1 + 3 * std::sin(i * 0.7), t);
+    st.setF32(metric::kPcCpuMaxMs, 14 + 8 * std::cos(i * 0.4), t);
+    return st;
+}
+
+// The PC stream card (2026-11-15). Panel pixels: the card starts at (8, 8) and is 496 wide. With the helper's
+// values: the text column x 14-202, the fps graph x 210-498 y 18-102, the frame-time graphs y 132-192 (CPU x 14-250,
+// GPU x 262-498), then two text rows. Without them: the title and one line
+void testPcStreamCard() {
+    const Layout card = oneWidget(inst(W::PcStream));
+    const int w = 512;
+    CHECK(std::string(widgetTitle(inst(W::PcStream), WidgetLanguage::Ko)) == "PC 스트리밍");
+    CHECK(std::string(widgetTitle(inst(W::PcStream), WidgetLanguage::En)) == "PC stream");
+    CHECK(std::string(widgetTitle(inst(W::PcStream), WidgetLanguage::Ja)) == "PC ストリーミング");
+    // Where nothing is known (the editor) it has its full height; on the panel the height follows the state
+    CHECK(layoutGrid(card).width == 512 && layoutGrid(card).slots[0].h == 242 && layoutGrid(card).slots[0].w == 496);
+    const auto one = [](StreamState state) {
+        return [state](int, double t) { return streamStore(state, t); };
+    };
+    const struct {
+        WidgetLanguage language;
+        const char* tag;
+    } kLanguages[] = {{WidgetLanguage::Ko, "ko"}, {WidgetLanguage::En, "en"}, {WidgetLanguage::Ja, "ja"}};
+    for (const auto& l : kLanguages) {
+        const std::string tag = std::string("_") + l.tag + ".png";
+        // No stream, no helper, an old helper: one line each, all inside the card
+        int hNone = 0, hNoHelper = 0, hOld = 0, hPc = 0;
+        const Pixels none = renderLive(card, l.language, 1, one(StreamState::None), "pc_stream_none" + tag, &hNone);
+        const Pixels noHelper = renderLive(card, l.language, 1, one(StreamState::NoHelper), "pc_stream_nohelper" + tag, &hNoHelper);
+        const Pixels old = renderLive(card, l.language, 1, one(StreamState::OldHelper), "pc_stream_oldhelper" + tag, &hOld);
+        CHECK(hNone == 76 && hNoHelper == 76 && hOld == 76);
+        CHECK(none != noHelper && none != old && noHelper != old);
+        CHECK(sameIn(none, noHelper, w, 8 + 496 - 12, 0, w, 76) && sameIn(none, old, w, 8 + 496 - 12, 0, w, 76));
+        CHECK(sameIn(none, noHelper, w, 0, 0, w, 8 + 30));  // the title row: the same title, nothing else
+        // A stream with the helper's values: 30 s of a game around 60 fps, so the three graphs hold lines
+        const Pixels pc = renderLive(card, l.language, 30, liveStreamStore, "pc_stream_helper" + tag, &hPc);
+        CHECK(hPc == 258);
+        CHECK(countIn(pc, w, 210, 18, 498, 102, 0xe27dfd) > 100);   // the fps line
+        CHECK(countIn(pc, w, 14, 132, 250, 192, 0xe27dfd) > 100);   // the CPU frame times
+        CHECK(countIn(pc, w, 262, 132, 498, 192, 0x58a6ff) > 100);  // the GPU's, in the GPU blue
+        CHECK(countIn(pc, w, 14, 18, 202, 70, 0xe27dfd) > 10);      // the dot before the fps
+        // The longest values stay in their places: nothing in the card's right padding, the gap before the fps graph
+        // or under the last row
+        const auto longStore = [](int i, double t) {
+            MetricStore st = liveStreamStore(i, t);
+            st.setF32(metric::kFrameDisplayHz, 144, t);
+            st.setF32(metric::kPcFps, 144, t);
+            st.setF32(metric::kPcMissedPct, 100, t);
+            st.setF32(metric::kPcPingMs, 123.4, t);
+            st.setF32(metric::kPcLinkMbps, 1000, t);
+            st.setF32(metric::kPcGpuMs, 123.4, t);
+            st.setF32(metric::kPcGpuMaxMs, 234.5, t);
+            st.setF32(metric::kPcCpuMs, 123.4, t);
+            st.setF32(metric::kPcCpuMaxMs, 234.5, t);
+            st.setF32(metric::kPcGpuPct, 100, t);
+            st.setF32(metric::kPcGpuTempC, 100, t);
+            st.setF32(metric::kPcVramUsedMib, 24450, t);
+            st.setF32(metric::kPcVramTotalMib, 24564, t);
+            st.setF32(metric::kPcCpuPct, 100, t);
+            st.setF32(metric::kFrameReprojectedPct, 100, t);
+            return st;
+        };
+        int hLong = 0;
+        const Pixels longest = renderLive(card, l.language, 30, longStore, "pc_stream_helper_long" + tag, &hLong);
+        CHECK(hLong == 258 && longest != pc);
+        CHECK(sameIn(longest, pc, w, 8 + 496 - 5, 0, w, 258));  // right of the content (the graphs end at x 498)
+        CHECK(sameIn(longest, pc, w, 203, 8, 210, 110));        // between the text column and the fps graph
+        CHECK(sameIn(longest, pc, w, 0, 8 + 236, w, 258));      // under the last row
+    }
+
+    // The game's fps against the headset's refresh rate (60 of 90: red), the GPU's load in the GPU blue
+    const Pixels pc = renderLive(card, WidgetLanguage::Ko, 1, one(StreamState::Helper), "");
+    CHECK(countIn(pc, w, 14, 18, 202, 70, 0xf85149) > 20);
+    CHECK(countIn(pc, w, 14, 196, 498, 220, 0x58a6ff) > 10);
+    // A value that is N/A is left out, each on its own. The headset idle: no fps, no frame times; the PC's load stays
+    const auto waiting = [](int, double t) {
+        MetricStore st = streamStore(StreamState::Helper, t);
+        for (uint16_t id : {metric::kPcFps, metric::kPcMissedPct, metric::kPcGpuMs, metric::kPcGpuMaxMs, metric::kPcCpuMs,
+                            metric::kPcCpuMaxMs}) {
+            st.setNa(id, Reason::NoFrames, t);
+        }
+        return st;
+    };
+    const Pixels idle = renderLive(card, WidgetLanguage::Ko, 1, waiting, "pc_stream_helper_waiting_ko.png");
+    CHECK(countIn(idle, w, 14, 18, 202, 70, 0xf85149) == 0 && countIn(idle, w, 14, 18, 202, 70, 0xe27dfd) == 0);
+    CHECK(sameIn(idle, pc, w, 0, 196, w, 258));  // both text rows
+    CHECK(!sameIn(idle, pc, w, 14, 110, 498, 130));  // the frame times' numbers
+    // A PC without an NVIDIA GPU and before SteamVR's first estimate of the link: the rest stays
+    const auto noGpu = [](int, double t) {
+        MetricStore st = streamStore(StreamState::Helper, t);
+        for (uint16_t id : {metric::kPcGpuPct, metric::kPcGpuTempC, metric::kPcVramUsedMib, metric::kPcVramTotalMib,
+                            metric::kPcLinkMbps}) {
+            st.setNa(id, Reason::SensorMissing, t);
+        }
+        return st;
+    };
+    const Pixels bare = renderLive(card, WidgetLanguage::Ko, 1, noGpu, "pc_stream_helper_no_gpu_ko.png");
+    CHECK(countIn(bare, w, 14, 196, 498, 220, 0x58a6ff) == 0);
+    CHECK(sameIn(bare, pc, w, 0, 0, w, 8 + 80) && sameIn(bare, pc, w, 0, 220, w, 258));  // the fps; the headset's row
+    CHECK(!sameIn(bare, pc, w, 14, 8 + 80, 202, 8 + 100));                               // the ping without the link
+
+    // The stream's state alone redraws the card (a borrowed metric), and its height follows
+    GridRenderer r(fonts());
+    r.setLayout(card);
+    MetricStore st = streamStore(StreamState::None);
+    WidgetContext c;
+    c.store = &st;
+    c.now = kNow;
+    c.language = WidgetLanguage::Ko;
+    r.render(c);
+    CHECK(!r.render(c) && r.geometry().textureHeight == 76);
+    st = streamStore(StreamState::Helper, 2.0);
+    CHECK(r.render(c) && r.geometry().textureHeight == 258);
+    st.setF32(metric::kTempCpuC, 60, 3.0);  // not shown: no redraw
+    CHECK(!r.render(c));
+}
+
 }  // namespace
 
 // The Dock's highlight: an accent border in the panel's margin while a laser points at the HUD. A change repaints
@@ -1496,6 +1640,7 @@ int main() {
     testSegmentedPillColours();
     testSimpleTemplates();
     testSimpleStream();
+    testPcStreamCard();
     testHighlight();
     testControls();
     testFrameRenderSize();

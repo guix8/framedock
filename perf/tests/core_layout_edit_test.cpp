@@ -64,7 +64,7 @@ void testPaletteRules() {
     }
     // Every real widget is offered; None and the reserved numbers are held back.
     for (const W t : {W::Frame, W::Cpu, W::GpuRam, W::Power, W::Battery, W::Temp, W::CpuItems, W::RamItems, W::Network,
-                      W::General, W::SimpleA, W::SimpleB}) {
+                      W::General, W::SimpleA, W::SimpleB, W::PcStream}) {
         CHECK(isOfferedInPalette(t));
     }
     CHECK(!isOfferedInPalette(static_cast<W>(12)) && !isOfferedInPalette(static_cast<W>(13)));

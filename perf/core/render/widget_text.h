@@ -119,6 +119,14 @@ struct WidgetText {
     const char* ctlRecordRefused;  ///< framecorder's tab said no, or didn't answer
     // Frame's render size (2026-11-13)
     const char* renderPc;  ///< after the size of a streamed game (read from the PC helper)
+    // The PC stream card (2026-11-15)
+    const char* pcStream;        ///< its title
+    const char* pcMissed;        ///< before a %: the frames the game on the PC didn't make in time for the display
+    const char* pcPing;          ///< before the ms: headset to PC and back
+    const char* pcHeadsetAgain;  ///< before a %: the headset's reprojection, said as what it is during a stream
+    const char* pcNoStream;      ///< not streaming
+    const char* pcNoHelper;      ///< streaming, the optional PC helper doesn't answer (the README's "PC helper" section)
+    const char* pcOldHelper;     ///< streaming, a helper from before /v2/state: it only knows the render size
 };
 
 /**

@@ -199,11 +199,12 @@ void testGeometry() {
         CHECK(a.y + a.h <= b.y);
     }
     // One chip per type, all inside the palette card
-    // the ten widgets, the two simple templates and the five controls; no reserved numbers; 녹화 only with framecorder
-    CHECK(rig.ed.chips().size() == 17);
+    // the ten widgets, the two simple templates, the PC stream card and the five controls; no reserved numbers; 녹화
+    // only with framecorder
+    CHECK(rig.ed.chips().size() == 18);
     for (const auto& c : rig.ed.chips()) CHECK(c.first != W::Record);
     rig.ed.setRecordOffered(true);
-    CHECK(rig.ed.chips().size() == 18 && rig.ed.chips().back().first == W::Record);
+    CHECK(rig.ed.chips().size() == 19 && rig.ed.chips().back().first == W::Record);
     for (const auto& c : rig.ed.chips()) {
         CHECK(c.second.x >= kPaletteCard.x && c.second.x + c.second.w <= kPaletteCard.x + kPaletteCard.w);
         CHECK(c.second.y >= kPaletteCard.y && c.second.y + c.second.h <= kPaletteCard.y + kPaletteCard.h);
@@ -626,7 +627,7 @@ void testUnofferedChips() {
     Rig rig(baseLayout(2));
     for (const auto& chip : rig.ed.chips()) CHECK(frame_perf_overlay::isOfferedInPalette(chip.first));
     for (const W type : {W::Frame, W::Cpu, W::GpuRam, W::Power, W::Battery, W::Temp, W::CpuItems, W::RamItems, W::Network,
-                         W::General}) {
+                         W::General, W::PcStream}) {
         bool found = false;
         for (const auto& chip : rig.ed.chips()) found = found || chip.first == type;
         CHECK(found);
@@ -1325,6 +1326,22 @@ void testChipLabelSizes() {
     for (const auto language : {frame_perf_overlay::WidgetLanguage::Ko, frame_perf_overlay::WidgetLanguage::Ja,
                                 frame_perf_overlay::WidgetLanguage::En}) {
         rig.ed.setLanguage(language);
+        // The thirteen readings: three rows (five, four, four), the first by its titles' length; every title fits,
+        // also with its check mark
+        int readings = 0;
+        for (const auto& chip : rig.ed.chips()) {
+            if (isControlWidget(chip.first)) continue;
+            const int row = readings < 5 ? 0 : 1 + (readings - 5) / 4;
+            CHECK(chip.second.y == rig.ed.chips()[0].second.y + row * (chip.second.h + 6));
+            CHECK(chip.second.x >= kPaletteCard.x && chip.second.x + chip.second.w <= kPaletteCard.x + kPaletteCard.w);
+            WidgetInstance w;
+            w.type = chip.first;
+            if (chip.first != W::Network) {
+                CHECK(fitSize(pen, frame_perf_overlay::widgetTitle(w, language), 17, 11, chip.second.w - 40, true) > 11);
+            }
+            ++readings;
+        }
+        CHECK(readings == 13);
         double rowY = -1;
         for (const auto& chip : rig.ed.chips()) {
             if (!isControlWidget(chip.first)) continue;

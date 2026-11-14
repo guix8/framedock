@@ -35,6 +35,7 @@ const KeyName kKeys[] = {
     {WidgetType::Profiles, "profiles"},
     {WidgetType::Browser, "browser"},
     {WidgetType::Record, "record"},
+    {WidgetType::PcStream, "pc_stream"},
 };
 
 WidgetInstance instance(WidgetType type, bool compact = true) {

@@ -60,6 +60,16 @@ void testCompiledRegistry() {
     for (const uint16_t id : {metric::kStreamState, metric::kPcFps}) {
         CHECK(std::find(a.begin(), a.end(), id) != a.end() && std::find(b.begin(), b.end(), id) != b.end());
     }
+    // The PC stream card (widget 22) owns nothing: it borrows the stream's metrics and, from the headset's frame
+    // timing, the refresh rate and the reprojection
+    CHECK(static_cast<int>(WidgetType::PcStream) == 22 && kWidgetTypeCount == 23);
+    const std::vector<uint16_t>& pc = borrowedMetrics(WidgetType::PcStream);
+    for (uint16_t id = metric::kStreamState; id <= metric::kPcPingMs; ++id) {
+        CHECK(std::find(pc.begin(), pc.end(), id) != pc.end());
+    }
+    CHECK(std::find(pc.begin(), pc.end(), metric::kFrameDisplayHz) != pc.end());
+    CHECK(std::find(pc.begin(), pc.end(), metric::kFrameReprojectedPct) != pc.end());
+    for (const MetricDef& d : registry()) CHECK(d.owner != WidgetType::PcStream);
     // A borrowed id missing from a table is reported
     const std::vector<MetricDef> tiny = {{metric::kFrameAppFps, "frame.app_fps", "fps", WidgetType::Frame,
                                           SourceId::FrameTiming, 500, WireType::F32}};

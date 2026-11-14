@@ -114,6 +114,10 @@ void LayoutEditor::relayout() {
         // 녹화 makes six controls: one row still, each chip as wide as its title's share (see below)
         const int columns = controls ? kControlChipColumns + (recordOffered_ ? 1 : 0) : kChipColumns;
         const double chipW = (innerW - (columns - 1) * kChipGap) / columns;
+        // The readings are thirteen with the PC stream card (2026-11-15), and a fourth row of them would push the
+        // selected widget's settings out of the card: their first row takes one more, and each of their rows shares
+        // its width by the titles' length (see below)
+        const int firstRow = controls ? columns : columns + 1;
         const size_t first = chips_.size();
         int i = 0;
         for (int t = 1; t < static_cast<int>(frame_perf_overlay::kWidgetTypeCount); ++t) {
@@ -126,33 +130,40 @@ void LayoutEditor::relayout() {
                 controlsLabelY_ = y + 15;
                 y += kGroupLabelH;
             }
-            chips_.push_back({type, {chipX + (i % columns) * (chipW + kChipGap), y + (i / columns) * (kChipH + kChipGap),
-                                     chipW, kChipH}});
+            const int column = i < firstRow ? i : (i - firstRow) % columns;
+            const int row = i < firstRow ? 0 : 1 + (i - firstRow) / columns;
+            chips_.push_back({type, {chipX + column * (chipW + kChipGap), y + row * (kChipH + kChipGap), chipW, kChipH}});
             ++i;
         }
-        if (controls && recordOffered_ && i == columns) {
-            // Six equal chips leave "Passthrough" too little room: widths by the titles' characters, plus 4 each
+        // Six equal chips leave "Passthrough" too little room: widths by the titles' characters, plus 4 each. The
+        // readings' full rows the same way (five in a row; "PC ストリーミング" beside three short titles), plus 6 each:
+        // their chips carry more padding and a check mark
+        for (size_t begin = first, end = first; begin < chips_.size(); begin = end) {
+            const size_t count = begin == first ? static_cast<size_t>(firstRow) : static_cast<size_t>(columns);
+            end = std::min(chips_.size(), begin + count);
+            if (end - begin != count || (controls && !recordOffered_)) continue;
+            const double padding = controls ? 4 : 6;
             std::vector<double> weights;
             double sum = 0;
-            for (size_t k = first; k < chips_.size(); ++k) {
+            for (size_t k = begin; k < end; ++k) {
                 frame_perf_overlay::WidgetInstance w;
                 w.type = chips_[k].first;
                 double chars = 0;
                 for (const char* p = frame_perf_overlay::widgetTitle(w, language_); *p != '\0'; ++p) {
                     if ((static_cast<unsigned char>(*p) & 0xC0) != 0x80) chars += 1;  // one per UTF-8 character
                 }
-                weights.push_back(chars + 4);
+                weights.push_back(chars + padding);
                 sum += weights.back();
             }
-            const double room = innerW - (columns - 1) * kChipGap;
+            const double room = innerW - static_cast<double>(count - 1) * kChipGap;
             double x = chipX;
-            for (size_t k = first; k < chips_.size(); ++k) {
+            for (size_t k = begin; k < end; ++k) {
                 chips_[k].second.x = x;
-                chips_[k].second.w = room * weights[k - first] / sum;
+                chips_[k].second.w = room * weights[k - begin] / sum;
                 x += chips_[k].second.w + kChipGap;
             }
         }
-        if (i > 0) y += ((i + columns - 1) / columns) * (kChipH + kChipGap);
+        if (i > 0) y += (1 + (std::max(i, firstRow) - firstRow + columns - 1) / columns) * (kChipH + kChipGap);
     }
     chipsBottom_ = y;
 

@@ -173,10 +173,17 @@ const std::vector<uint16_t>& borrowedMetrics(WidgetType type) {
     static const std::vector<uint16_t> kSimpleB = {kFrameAppFps, kFrameDisplayHz, kBatteryPct, kBatteryStatus,
                                                    kBatteryChargerOnline, kBatteryRemainMin, kClock,
                                                    kFrameReprojectedPct, kStreamState, kPcFps};
+    // The PC stream card: the stream's state and everything the PC helper says (RenderSize), with the headset's
+    // refresh rate (the frame budget) and reprojection (FrameTiming)
+    static const std::vector<uint16_t> kPcStream = {
+        kStreamState, kPcFps,         kPcMissedPct,    kPcGpuMs,  kPcGpuMaxMs, kPcCpuMs,  kPcCpuMaxMs,     kPcGpuPct,
+        kPcGpuTempC,  kPcVramUsedMib, kPcVramTotalMib, kPcCpuPct, kPcLinkMbps, kPcPingMs, kFrameDisplayHz, kFrameReprojectedPct,
+    };
     static const std::vector<uint16_t> kNone;
     switch (type) {
         case WidgetType::SimpleA: return kSimpleA;
         case WidgetType::SimpleB: return kSimpleB;
+        case WidgetType::PcStream: return kPcStream;
         default: return kNone;
     }
 }
@@ -262,6 +269,7 @@ const char* widgetName(WidgetType type) {
         case WidgetType::Profiles: return "Profiles";
         case WidgetType::Browser: return "Browser";
         case WidgetType::Record: return "Record";
+        case WidgetType::PcStream: return "PC stream";
     }
     return "unknown";
 }

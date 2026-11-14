@@ -347,6 +347,11 @@ void testSimpleTemplateKeys() {
     CHECK(!hasCompactView(W::SimpleA) && !hasCompactView(W::SimpleB));
     WidgetType parsed = W::None;
     CHECK(parseWidgetKey("simple_b", parsed) && parsed == W::SimpleB);
+    // The PC stream card's (2026-11-15)
+    CHECK(parseLayoutText("{ \"version\": 2, \"columns\": [ [ {\"type\": \"pc_stream\"} ] ] }", layout, warnings, error));
+    CHECK(warnings.empty() && sameTypes(layout.columns[0], {W::PcStream}));
+    CHECK(parseLayoutText(layoutToJson(layout), back, warnings, error) && back.sameWidgets(layout));
+    CHECK(std::string(widgetKey(W::PcStream)) == "pc_stream" && !hasCompactView(W::PcStream) && !isControlWidget(W::PcStream));
 }
 
 }  // namespace

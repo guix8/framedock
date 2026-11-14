@@ -589,6 +589,12 @@ void testSimpleTemplates() {
         CHECK(sched.refCount(s) ==
               (s == S::FrameTiming || s == S::Battery || s == S::Clock || s == S::RenderSize ? 1u : 0u));
     }
+    // The PC stream card: the PC helper's values (RenderSize) and the headset's frame timing, nothing else
+    sched.setEnabledWidgets({W::PcStream});
+    for (size_t i = 1; i < kSourceCount; ++i) {
+        const S s = static_cast<S>(i);
+        CHECK(sched.refCount(s) == (s == S::FrameTiming || s == S::RenderSize ? 1u : 0u));
+    }
     // Next to a widget that owns the same source, both count
     sched.setEnabledWidgets({W::SimpleB, W::Frame});
     CHECK(sched.refCount(S::FrameTiming) == 2);

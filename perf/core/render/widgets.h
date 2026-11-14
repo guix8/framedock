@@ -109,8 +109,8 @@ struct WidgetContext {
 struct WidgetHistory {
     History a;  ///< main series (fps, vph W, CPU °C, GPU load %)
     History b;  ///< second series (GPU °C)
-    History c;  ///< Frame: worst CPU frame time per read (ms), for its graphs with Compact off
-    History d;  ///< Frame: worst GPU frame time per read (ms)
+    History c;  ///< Frame: worst CPU frame time per read (ms), for its graphs with Compact off; PC stream: the PC's
+    History d;  ///< Frame: worst GPU frame time per read (ms); PC stream: the PC's
 };
 
 /** A throughput as text, value and unit apart so they can be styled differently. */

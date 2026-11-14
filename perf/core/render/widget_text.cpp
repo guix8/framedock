@@ -77,6 +77,11 @@ const WidgetText kJapanese = {
     "クリップ保存", "クリップを保存しました", "framecorder でできませんでした",
     // Frame's render size
     "PC",
+    // The PC stream card
+    "PC ストリーミング", "取りこぼし ", "Ping ", "ヘッドセットが再表示したフレーム ",
+    "PC ストリーミング中ではありません",
+    "PC ヘルパー（任意）が応答しません。README「PC ヘルパー」をご覧ください",
+    "PC ヘルパーの更新が必要です（今はレンダリングサイズのみ）",
 };
 
 const WidgetText kEnglish = {
@@ -148,6 +153,11 @@ const WidgetText kEnglish = {
     "Clip now", "Clip saved", "framecorder couldn't do that",
     // Frame's render size
     "PC",
+    // The PC stream card
+    "PC stream", "Missed ", "Ping ", "Frames the headset showed again ",
+    "No PC stream is running",
+    "The optional PC helper isn't answering. See \"PC helper\" in the README",
+    "The PC helper needs an update (render size only for now)",
 };
 
 const WidgetText kKorean = {
@@ -219,6 +229,11 @@ const WidgetText kKorean = {
     "클립 저장", "클립을 저장했어요", "framecorder가 하지 못했어요",
     // Frame's render size
     "PC",
+    // The PC stream card
+    "PC 스트리밍", "놓친 프레임 ", "핑 ", "헤드셋이 다시 보여 준 프레임 ",
+    "PC 스트리밍 중이 아니에요",
+    "PC 도우미(선택)가 응답하지 않아요. README의 「PC 도우미」를 보세요",
+    "PC 도우미를 업데이트해야 해요 (지금은 렌더 크기만 알 수 있어요)",
 };
 
 }  // namespace

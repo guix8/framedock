@@ -450,6 +450,7 @@ const char* titleOf(const WidgetInstance& w, const WidgetText& t) {
         case WidgetType::Profiles: return t.ctlProfiles;
         case WidgetType::Browser: return t.ctlBrowser;
         case WidgetType::Record: return t.ctlRecord;
+        case WidgetType::PcStream: return t.pcStream;
         case WidgetType::None: break;
     }
     return "";
@@ -1173,6 +1174,136 @@ void drawSimpleB(const Pen& pen, double x, double y, const WidgetContext& ctx) {
     simpleBattery(pen, x + 16, y + 84, right, ctx);
 }
 
+// ---- The PC stream card (Frame Dock, 2026-11-15): a PC stream in detail, in the Frame card's look ----
+
+constexpr double kPcRowsTop = kFrameTimesBedY + kFrameTimesH;                   // under the frame-time graphs
+constexpr int kPcStreamFullH = static_cast<int>(kPcRowsTop + 2 * kLineH) + 14;  // and two text rows
+
+/**
+ * The PC stream card's height: the graphs and rows during a stream with the helper's values (and where nothing is
+ * known: the editor), else its title and one line.
+ */
+int pcStreamHeight(const WidgetContext* ctx) {
+    if (ctx == nullptr || streamState(*ctx) == StreamState::Helper) return kPcStreamFullH;
+    return static_cast<int>(kTop) + 20 + static_cast<int>(kLineH) + 12;
+}
+
+/** One line of the PC stream card's text, made smaller and then cut where it doesn't fit the card. */
+void pcStreamNote(const Pen& pen, double x, double baseline, const std::string& note) {
+    const double room = kInR - kInX - 16;
+    const double size = fitSize(pen, note, 15, 12, room, false);
+    pen.text(x + kInX + 8, baseline, ellipsize(pen, note, size, room, false), size, kTextMuted);
+}
+
+void drawPcStream(const Pen& pen, double x, double y, const WidgetContext& ctx, const WidgetHistory& h) {
+    const Thresholds& th = ctx.thresholds;
+    const WidgetText& t = texts(ctx);
+    const double cx = x + kInX;
+    const double top = y + kTop;
+    const StreamState state = streamState(ctx);
+    if (state != StreamState::Helper) {
+        // Nothing to show: why, in one line
+        pcStreamNote(pen, x, top + 20 + kLineH,
+                     state == StreamState::NoHelper ? t.pcNoHelper
+                     : state == StreamState::OldHelper ? t.pcOldHelper
+                                                       : t.pcNoStream);
+        return;
+    }
+    // The graphs' beds: only this state has graphs, so they aren't on the static layer
+    staticGraphBed(pen, x, y);
+    staticFrameTimesBeds(pen, x, y);
+    const double hz = f(ctx, kFrameDisplayHz);  // the headset's display: what the game on the PC renders for
+    const double targetMs = hz > 0 ? 1000.0 / hz : std::nan("");
+    const auto msLevel = [&](double ms) {
+        return levelOf(ms, targetMs * th.frameWarnRatio, targetMs * th.frameCritRatio);
+    };
+    // Left of the graph: the game's fps on the PC, what it missed, the link. A value that is N/A is left out
+    const double textRoom = kGraphX - 8 - kInX - 14;
+    const double fps = f(ctx, kPcFps);
+    const Level level = ok(ctx, kPcFps) && hz > 0 ? levelOf(fps, hz * th.fpsWarnRatio, hz * th.fpsCritRatio, true)
+                                                  : Level::Normal;
+    if (!ok(ctx, kPcFps)) {
+        drawBigValue(pen, cx, top + 52, "--", "fps", kTextMuted);
+        pen.text(cx, top + 72, t.waiting, 15, kTextMuted);
+    } else {
+        pen.dot(cx + 4, top + 42, kAccent);
+        const double bigWidth = drawBigValue(pen, cx + 14, top + 52, num(fps, 0), "fps", colorOf(level));
+        if (hz > 0) pen.text(cx + 14 + bigWidth + 6, top + 52, "/ " + num(hz, 0) + "Hz", 14, kTextMuted);
+    }
+    if (ok(ctx, kPcMissedPct)) {
+        const std::string missed = std::string(t.pcMissed) + num(f(ctx, kPcMissedPct), 0) + "%";
+        pen.text(cx + 14, top + 72, missed, fitSize(pen, missed, 15, 12, textRoom, false), colorOf(level, kTextMuted));
+    }
+    std::string link;
+    if (ok(ctx, kPcPingMs)) {
+        const double ping = f(ctx, kPcPingMs);
+        link = std::string(t.pcPing) + num(ping, ping < 10 ? 1 : 0) + " ms";
+    }
+    if (ok(ctx, kPcLinkMbps)) link += (link.empty() ? "" : " · ") + num(f(ctx, kPcLinkMbps), 0) + " Mbps";
+    if (!link.empty()) pen.text(cx + 14, top + 90, link, fitSize(pen, link, 15, 11, textRoom, false), kTextMuted);
+    // The fps graph, as the Frame card's: 0 fps to 25% above the refresh rate
+    const double scaleHz = hz > 0 ? hz : 90.0;
+    const double maxV = std::ceil(std::fmax(scaleHz, h.a.maxValue()) * 1.25 / 10.0) * 10.0;
+    const GraphArea area = graphArea(x, y, 0.0, maxV, ctx);
+    drawGraphLabel(pen, area, num(maxV, 0) + "fps");
+    drawGuide(pen, area, scaleHz, kTextMuted);
+    drawSeries(pen, area, h.a, kAccent);
+    // CPU and GPU frame times on the PC, the worst frame per read, as the Frame card's with Compact off. Dotted
+    // line: the budget
+    const double budget = std::isnan(targetMs) ? 1000.0 / scaleHz : targetMs;
+    const double dataMax = std::fmax(h.c.maxValue(), h.d.maxValue());
+    const double msMax = std::ceil(std::fmax(budget * 1.5, std::isnan(dataMax) ? 0.0 : dataMax * 1.15) / 5.0) * 5.0;
+    const struct {
+        const char* name;
+        uint16_t avgId, maxId;
+        const History* history;
+        Color color;
+    } kTimes[] = {{"CPU ", kPcCpuMs, kPcCpuMaxMs, &h.c, kAccent}, {"GPU ", kPcGpuMs, kPcGpuMaxMs, &h.d, kGpu}};
+    for (int k = 0; k < 2; ++k) {
+        const GraphArea times = frameTimesArea(x, y, k, msMax, ctx);
+        const double avg = f(ctx, kTimes[k].avgId);
+        const double worst = f(ctx, kTimes[k].maxId);
+        double lx = times.x + 2;
+        const double ly = y + kFrameTimesLabelY;
+        lx += pen.text(lx, ly, kTimes[k].name, 14, kTextMuted);
+        if (ok(ctx, kTimes[k].avgId)) lx += pen.text(lx, ly, num(avg, 1), 14, colorOf(msLevel(avg)), true);
+        if (ok(ctx, kTimes[k].maxId)) {
+            lx += pen.text(lx, ly, t.msMaxSep, 13, kTextMuted);
+            pen.text(lx, ly, num(worst, 1), 14, colorOf(msLevel(worst)), true);
+        }
+        drawGraphLabel(pen, times, num(msMax, 0) + " ms");
+        drawGuide(pen, times, targetMs, kTextMuted);
+        drawSeries(pen, times, *kTimes[k].history, kTimes[k].color);
+    }
+    // The PC's own load: its GPU with temperature and memory, its CPU
+    double lx = cx + 8;
+    double ry = y + kPcRowsTop + kLineH;
+    const auto part = [&](const std::string& label, const std::string& v, const std::string& unit, Color c) {
+        lx += pen.text(lx, ry, label, 15, kTextMuted);
+        lx += pen.text(lx, ry, v, 15, c, true);
+        lx += pen.text(lx, ry, unit, 15, kTextMuted) + 14;
+    };
+    const char* gpuLabel = "PC GPU ";
+    if (ok(ctx, kPcGpuPct)) {
+        const double gpu = f(ctx, kPcGpuPct);
+        part(gpuLabel, num(gpu, 0), "%", colorOf(levelOf(gpu, th.gpuWarnPct, th.gpuCritPct), kGpu));
+        gpuLabel = "";
+    }
+    if (ok(ctx, kPcGpuTempC)) part(gpuLabel, num(f(ctx, kPcGpuTempC), 0), t.celsius, kText);
+    if (ok(ctx, kPcVramUsedMib) && ok(ctx, kPcVramTotalMib)) {
+        part("VRAM ", num(f(ctx, kPcVramUsedMib) / 1024.0, 1), " / " + num(f(ctx, kPcVramTotalMib) / 1024.0, 1) + " GiB",
+             kText);
+    }
+    if (ok(ctx, kPcCpuPct)) part("PC CPU ", num(f(ctx, kPcCpuPct), 0), "%", kText);
+    // The headset's reprojection: during a stream, the frames it had to show again (late or lost on the way)
+    if (ok(ctx, kFrameReprojectedPct)) {
+        const double reproj = f(ctx, kFrameReprojectedPct);
+        lx = cx + 8;
+        ry += kLineH;
+        part(t.pcHeadsetAgain, num(reproj, 0), "%", colorOf(levelOf(reproj, th.reprojWarnPct, th.reprojCritPct)));
+    }
+}
+
 // ---- The controls (Frame Dock): a title line and one row of buttons the Dock's laser presses ----
 
 constexpr int kControlH = 100;
@@ -1505,6 +1636,7 @@ int widgetHeight(const WidgetInstance& w, const WidgetContext* ctx) {
         case WidgetType::Profiles:
         case WidgetType::Browser:
         case WidgetType::Record: return kControlH;
+        case WidgetType::PcStream: return pcStreamHeight(ctx);
         case WidgetType::None: break;
     }
     return 0;
@@ -1550,6 +1682,12 @@ void pushWidgetHistory(const WidgetInstance& w, const WidgetContext& ctx, Widget
             history.a.push(ctx.now, f(ctx, kTempCpuC), keep);
             history.b.push(ctx.now, f(ctx, kTempGpuC), keep);
             break;
+        case WidgetType::PcStream:
+            // The Frame card's three series with the PC's values; N/A (also while there is no stream) is a gap
+            history.a.push(ctx.now, f(ctx, kPcFps), keep);
+            history.c.push(ctx.now, f(ctx, kPcCpuMaxMs), keep);
+            history.d.push(ctx.now, f(ctx, kPcGpuMaxMs), keep);
+            break;
         default: break;
     }
 }
@@ -1575,6 +1713,7 @@ void drawWidgetDynamic(const Pen& pen, double x, double y, const WidgetInstance&
         case WidgetType::Profiles:
         case WidgetType::Browser:
         case WidgetType::Record: drawControl(pen, x, y, w, ctx); break;
+        case WidgetType::PcStream: drawPcStream(pen, x, y, ctx, history); break;
         case WidgetType::None: break;
     }
 }
