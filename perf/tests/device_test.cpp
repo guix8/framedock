@@ -477,8 +477,48 @@ void testSyncModel() {
     CHECK(screen.strip == "● 집 PC 켜짐" && screen.bigEnabled);
     m.startSync("76561198000000002", true);
     CHECK(m.sync.message.empty());
+    m.takeActions();
+    // From the list, an account the Frame has: the Frame's own switch is asked (취소: the reminder, as before)
     m.syncFinished(true, "");
+    CHECK(m.sync.question == SyncState::Question::Frame && m.sync.message.empty());
+    screen = syncScreen(m.sync);
+    CHECK(screen.question == "프레임도 Sam 계정으로 바꿀까요? 프레임 스팀이 잠깐 다시 시작돼요." && screen.yesText == "바꾸기");
+    m.answer(false);
+    CHECK(m.takeActions().empty() && m.sync.question == SyncState::Question::None);
     CHECK(m.sync.message == "집 PC를 바꿨어요. 프레임 계정은 스팀 메뉴에서 직접 바꿔 주세요." && !m.sync.messageError);
+    // 바꾸기: busy while the Frame's Steam restarts; the end says so
+    m.startSync("76561198000000002", true);
+    m.syncFinished(true, "");
+    m.takeActions();
+    m.answer(true);
+    actions = m.takeActions();
+    CHECK(actions.size() == 1 && actions[0].kind == Kind::SwitchFrame && actions[0].id == "76561198000000002");
+    CHECK(m.sync.busy && m.sync.message == "프레임 스팀을 다시 시작하는 중…" && !syncScreen(m.sync).rowsEnabled);
+    m.frameSwitchFinished(true, "");
+    CHECK(!m.sync.busy && m.sync.message == "집 PC와 프레임을 모두 바꿨어요." && !m.sync.messageError);
+    m.frameSwitchFinished(false, tr(Tx::SyncFrameGame));
+    CHECK(m.sync.message == tr(Tx::SyncFrameGame) && m.sync.messageError);
+    // 끄기 while the question is open: the shutdown question, and the reminder stays
+    m.startSync("76561198000000002", true);
+    m.syncFinished(true, "");
+    m.askShutdown();
+    CHECK(m.sync.question == SyncState::Question::Shutdown);
+    CHECK(m.sync.message == "집 PC를 바꿨어요. 프레임 계정은 스팀 메뉴에서 직접 바꿔 주세요.");
+    m.answer(false);
+    m.takeActions();
+    // A new run while the question is open drops it; an account the Frame lacks gets the reminder
+    m.startSync("76561198000000002", true);
+    m.syncFinished(true, "");
+    m.startSync(m.sync.frameId, false);
+    CHECK(m.sync.question == SyncState::Question::None && m.sync.busy);
+    m.syncFinished(true, "");
+    const auto frameAccounts = m.sync.frameAccounts;
+    m.sync.frameAccounts.pop_back();  // Kai is only on the PC now
+    m.startSync("76561198000000005", true);
+    m.syncFinished(true, "");
+    CHECK(m.sync.question == SyncState::Question::None);
+    CHECK(m.sync.message == "집 PC를 바꿨어요. 프레임 계정은 스팀 메뉴에서 직접 바꿔 주세요.");
+    m.sync.frameAccounts = frameAccounts;
     m.startSync(m.sync.frameId, false);
     m.syncFinished(true, "");
     CHECK(m.sync.message.empty());

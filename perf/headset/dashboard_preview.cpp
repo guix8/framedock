@@ -46,7 +46,8 @@ ProfilesUiState previewProfiles(Language language, bool profilesPage) {
 }
 
 const char* const kPreviewDeviceVariants[] = {"",           "single",       "unavailable", "sync-pc-off",
-                                              "sync-switching", "sync-confirm", "sync-error"};
+                                              "sync-switching", "sync-confirm", "sync-error",
+                                              "sync-frame"};
 const size_t kPreviewDeviceVariantCount = sizeof(kPreviewDeviceVariants) / sizeof(kPreviewDeviceVariants[0]);
 
 bool previewDeviceState(DeviceModel& model, const std::string& variant) {
@@ -111,6 +112,13 @@ bool previewDeviceState(DeviceModel& model, const std::string& variant) {
         model.syncProgress(framesync::Step::WaitingLogin);
         model.syncProgress(framesync::Step::Switching);
         if (variant == "sync-confirm") model.askGame(0);
+        model.takeActions();
+        return true;
+    }
+    if (variant == "sync-frame") {
+        // The PC was just switched to Sam from the list: the Frame's own switch is asked
+        model.startSync("76561198000000002", true);
+        model.syncFinished(true, "");
         model.takeActions();
         return true;
     }

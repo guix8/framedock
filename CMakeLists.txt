@@ -116,6 +116,7 @@ add_library(framedock-device STATIC
   ${PERF}/headset/camera_switch.cpp
   ${PERF}/headset/room_view.cpp
   ${PERF}/headset/frame_steam.cpp
+  ${PERF}/headset/frame_steam_switch.cpp
   ${PERF}/headset/frame_sync_agent.cpp
   ${PERF}/headset/frame_sync_worker.cpp
   ${PERF}/headset/device_backend.cpp

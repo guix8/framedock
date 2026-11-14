@@ -43,13 +43,14 @@ public:
     void startSync(const std::string& steamId) override;
     void answerGame(bool yes) override;
     void shutdownPc() override;
+    void switchFrame(const std::string& steamId) override;
     std::vector<SyncEvent> take() override;
 
     /** Ends the job in progress and joins the thread (also done by the destructor). */
     void stop();
 
 private:
-    enum class Job { Setup, Refresh, Sync, Shutdown };
+    enum class Job { Setup, Refresh, Sync, Shutdown, SwitchFrame };
     struct Command {
         Job job;
         std::string id;
@@ -77,6 +78,7 @@ private:
     void doRefresh();
     void doSync(const std::string& target);
     void doShutdown();
+    void doSwitchFrame(const std::string& target);
     /** Sleeps unless stopping. @return false if stopping */
     bool sleepFor(double seconds);
     bool confirmGame();

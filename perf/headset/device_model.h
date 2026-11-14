@@ -73,12 +73,14 @@ struct SyncState {
     // A run (app.py's busy and _progress)
     bool busy = false;
     std::string busyName;                     ///< whose account it switches to
+    std::string targetId;                     ///< the account it switches to (the Frame's question asks for it)
     std::optional<framesync::Step> step;      ///< the last progress ("" until the first)
     bool fromList = false;                    ///< started from the list of other accounts
     bool waking = false;                      ///< this run woke the PC: the strip says 켜는 중 until it ends
 
     /** The question line inside the page (VR may not show another window). */
-    enum class Question { None, Game, Shutdown };
+    /// Frame: the PC was switched from the list; switch the Frame's own Steam to targetId too?
+    enum class Question { None, Game, Shutdown, Frame };
     Question question = Question::None;
     double questionUntil = 0;  ///< Game: unanswered by then counts as 취소 (kAskTimeoutSec)
 
@@ -105,7 +107,7 @@ struct SyncScreen {
     std::vector<framesync::Row> rows;
     bool rowsEnabled = false;   ///< not during a run
     std::string question;       ///< "" = no question line
-    std::string yesText;        ///< the question's yes button: 계속 (a game runs), 끄기 (the PC's 끄기)
+    std::string yesText;        ///< the question's yes button: 계속 (a game runs), 끄기 (the PC's 끄기), 바꾸기 (the Frame)
     std::string message;
     bool messageError = false;
 };
@@ -123,6 +125,7 @@ struct DeviceAction {
         StartSync,       ///< id: the account to switch the PC to; flag = picked from the list
         AnswerGame,      ///< flag = 계속 (false = 취소, or no answer in kAskTimeoutSec)
         ShutdownPc,      ///< the PC's 끄기, confirmed
+        SwitchFrame,     ///< id: the account to switch the Frame's own Steam to (its question answered 바꾸기)
     };
     explicit DeviceAction(Kind k, std::string actionId = {}) : kind(k), id(std::move(actionId)) {}
     Kind kind;
@@ -156,6 +159,8 @@ public:
     void syncProgress(framesync::Step step);
     /** app.py's _finish. */
     void syncFinished(bool ok, const std::string& message);
+    /** The Frame's own switch ended (ok: Steam logged on as the account; else message says why). */
+    void frameSwitchFinished(bool ok, const std::string& message);
     /** The agent says a game runs: the question line asks (no answer in kAskTimeoutSec = 취소). */
     void askGame(double now);
     /** A line under the big button (the PC's 끄기 answered). */
@@ -184,7 +189,7 @@ public:
     void startSync(const std::string& steamId, bool fromList);
     /** 끄기: asks "집 PC를 끌까요?" (only while the PC answers and no run is going). */
     void askShutdown();
-    /** 계속 / 취소 on the question line. */
+    /** 계속 / 끄기 / 바꾸기 or 취소 on the question line. */
     void answer(bool yes);
 
     /** The question's timeout. @return true if something changed (redraw) */

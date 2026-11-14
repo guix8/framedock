@@ -72,6 +72,7 @@ struct SyncEvent {
         Progress,  ///< step
         AskGame,   ///< a game runs on the PC: ask (answerGame)
         Finished,  ///< ok, message
+        FrameSwitched,  ///< the Frame's own Steam switch ended: ok, message
         Message,   ///< a line for the page (the PC's 끄기): message, error
     };
     Kind kind = Kind::Refresh;
@@ -101,6 +102,8 @@ public:
     virtual void startSync(const std::string& steamId) = 0;
     virtual void answerGame(bool yes) = 0;
     virtual void shutdownPc() = 0;
+    /** Switches the Frame's own Steam to steamId (frame_steam_switch.h): FrameSwitched, then Setup again. */
+    virtual void switchFrame(const std::string& steamId) = 0;
     /** @return the events since the last call, oldest first */
     virtual std::vector<SyncEvent> take() = 0;
 };

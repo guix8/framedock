@@ -373,7 +373,7 @@ void printUsage() {
         "                             (gaze: follow gaze, gaze-fit: a fit running, gaze-review: a fit just done,\n"
         "                             gaze-failed: a fit that failed, a dot unsteady)\n"
         "      --preview-device V     with --preview-page device: single, unavailable, sync-pc-off, sync-switching,\n"
-        "                             sync-confirm or sync-error (made-up state; nothing is read or sent)\n"
+        "                             sync-confirm, sync-error or sync-frame (made-up state; nothing is read or sent)\n"
         "      --preview-record S     the Layout page's palette offers Record (as with framecorder installed)\n"
         "  --language ja|en|ko  for the PNGs: draw in this language instead of the config's\n"
         "  --config PATH        config file (default ~/.config/frame-perf-overlay/config.json)\n"

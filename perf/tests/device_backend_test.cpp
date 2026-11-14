@@ -8,6 +8,7 @@
 #include "device_backend.h"
 #include "device_model.h"
 #include "frame_steam.h"
+#include "frame_steam_switch.h"
 #include "frame_sync_agent.h"
 
 #include <unistd.h>
@@ -16,6 +17,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -292,6 +294,218 @@ void testFrameSteam() {
           odd[0].fields.at("x") == "K");
 }
 
+
+// ---- Switching the Frame's own Steam ----
+
+// Two accounts as Steam writes them; 76561198000000002 is [U:1:39734274]
+const char* const kLoginUsers =
+    "\"users\"\n{\n"
+    "\t\"76561198000000001\"\n\t{\n\t\t\"AccountName\"\t\t\"alpha_acct\"\n\t\t\"PersonaName\"\t\t\"Alpha {x}\"\n"
+    "\t\t\"RememberPassword\"\t\t\"1\"\n\t\t\"AutoLogin\"\t\t\"1\"\n\t}\n"
+    "\t\"76561198000000002\"\n\t{\n\t\t\"AccountName\"\t\t\"bravo_acct\"\n\t\t\"PersonaName\"\t\t\"Bravo\"\n"
+    "\t\t\"RememberPassword\"\t\t\"1\"\n\t\t\"AutoLogin\"\t\t\"0\"\n\t}\n"
+    "}\n";
+const char* const kRegistry =
+    "\"Registry\"\n{\n\t\"HKCU\"\n\t{\n\t\t\"Software\"\n\t\t{\n\t\t\t\"Valve\"\n\t\t\t{\n\t\t\t\t\"Steam\"\n\t\t\t\t{\n"
+    "\t\t\t\t\t\"AutoLoginUser\"\t\t\"alpha_acct\"\n\t\t\t\t\t\"Language\"\t\t\"koreana\"\n"
+    "\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n";
+const char* const kBravoLogon =
+    "[2026-11-14 21:10:00] [Logged On, 4, 7] [U:1:39734274] RecvMsgClientLogOnResponse() : processing complete\n";
+
+void testFrameSteamSwitch() {
+    // The text changes: only the AutoLogin values / the AutoLoginUser value move
+    const auto users = framesync::withAutoLogin(kLoginUsers, "76561198000000002");
+    CHECK(users.has_value());
+    if (users) {
+        const auto parsed = framesync::parseLoginUsers(*users);
+        CHECK(framesync::currentSteamId(parsed) == "76561198000000002");
+        CHECK(users->size() == std::string(kLoginUsers).size());
+        CHECK(parsed.size() == 2 && parsed[0].fields.at("PersonaName") == "Alpha {x}");
+    }
+    CHECK(!framesync::withAutoLogin(kLoginUsers, "76561198000000003"));  // not on the Frame
+    CHECK(!framesync::withAutoLogin(kLoginUsers, "../etc"));
+    CHECK(!framesync::withAutoLogin("\"users\" { \"76561198000000002\" { \"AutoLogin\" ", "76561198000000002"));
+    CHECK(!framesync::withAutoLogin("\"users\" { \"76561198000000002\" { \"AccountName\" \"b\" } }",
+                                    "76561198000000002"));  // no AutoLogin key
+    const auto registry = framesync::withAutoLoginUser(kRegistry, "bravo_acct");
+    CHECK(registry && registry->find("\"AutoLoginUser\"\t\t\"bravo_acct\"") != std::string::npos &&
+          registry->find("koreana") != std::string::npos);
+    CHECK(!framesync::withAutoLoginUser(kRegistry, "bad\"name"));
+    CHECK(!framesync::withAutoLoginUser("\"Steam\" { \"Language\" \"x\" }", "bravo_acct"));
+    CHECK(!framesync::withAutoLoginUser("\"AutoLoginUser\" \"a\" \"AutoLoginUser\" \"b\"", "bravo_acct"));
+    // A value that reads "AutoLoginUser" isn't a key; escapes and nested blocks pass through
+    const auto valueLikeKey =
+        framesync::withAutoLoginUser("\"Note\" \"AutoLoginUser\" \"AutoLoginUser\" \"old\"", "bravo_acct");
+    CHECK(valueLikeKey == std::string("\"Note\" \"AutoLoginUser\" \"AutoLoginUser\" \"bravo_acct\""));
+    const std::string nested =
+        "\"users\" { \"76561198000000001\" { \"PersonaName\" \"a \\\"q\\\" }\" \"x\" { \"AutoLogin\" \"1\" }"
+        " \"AutoLogin\" \"1\" } \"76561198000000002\" { \"AutoLogin\" \"0\" } }";
+    const auto nestedOut = framesync::withAutoLogin(nested, "76561198000000002");
+    CHECK(nestedOut == std::string("\"users\" { \"76561198000000001\" { \"PersonaName\" \"a \\\"q\\\" }\" \"x\" { "
+                                   "\"AutoLogin\" \"1\" } \"AutoLogin\" \"0\" } \"76561198000000002\" { \"AutoLogin\" \"1\" } }"));
+    // The logon lines as Steam wrote them on the headset (2026-11-14)
+    const std::string log =
+        "[2026-11-14 21:09:23] [Logging On, 4, 7] [U:1:1520321656] RecvMsgClientLogOnResponse() : [U:1:1520321656] 'OK'\n"
+        "[2026-11-14 21:09:23] [Logged On, 4, 7] [U:1:1520321656] RecvMsgClientLogOnResponse() : processing complete\n";
+    CHECK(framesync::loggedOnAs(log, "76561199480587384"));
+    CHECK(!framesync::loggedOnAs(log.substr(0, log.find('\n') + 1), "76561199480587384"));  // only logging on
+    CHECK(!framesync::loggedOnAs(log, "76561197991721050"));
+    CHECK(framesync::loggedOnAs(kBravoLogon, "76561198000000002"));
+
+    // A game on the Frame: "reaper SteamLaunch AppId=…"
+    const std::string proc = tempDir("proc");
+    writeAll(proc + "/12/cmdline", std::string("/usr/bin/bash\0-c\0x", 18));
+    writeAll(proc + "/self/cmdline", std::string("reaper\0SteamLaunch\0", 19));  // not a pid
+    writeAll(proc + "/13/cmdline", std::string("reaper\0Steam", 12));
+    CHECK(!framesync::frameGameRunning(proc));
+    const std::string reaper = std::string("/home/u/.local/share/Steam/ubuntu12_64/reaper") + '\0' + "SteamLaunch" + '\0' +
+                               "AppId=1" + '\0';
+    writeAll(proc + "/34/cmdline", reaper);
+    CHECK(framesync::frameGameRunning(proc));
+    CHECK(!framesync::frameGameRunning(proc + "/none"));
+    std::filesystem::remove_all(proc);
+
+    // The run, with a made-up Steam: it rewrites its files as it stops and logs on as it starts
+    const std::string dir = tempDir("frame-switch");
+    framesync::FrameSwitchPaths paths;
+    paths.steamDir = dir + "/Steam";
+    paths.registryFile = dir + "/registry.vdf";
+    paths.backupDir = dir + "/backup";
+    const std::string usersFile = paths.steamDir + "/config/loginusers.vdf";
+    const std::string logFile = paths.steamDir + "/logs/connection_log.txt";
+    const std::string quitWrite = std::string(kLoginUsers) + "\n";  // what Steam writes as it quits
+    std::vector<std::string> verbs;
+    bool logsOn = true;
+    bool game = false;
+    bool stopWorks = true;
+    bool startWorks = true;
+    bool rotates = false;  // Steam starts a new log
+    bool quitting = false;
+    int sleeps = 0;
+    const auto reset = [&] {
+        writeAll(usersFile, kLoginUsers);
+        writeAll(paths.registryFile, kRegistry);
+        writeAll(logFile, log);  // an older logon, of someone else
+        std::filesystem::remove_all(paths.backupDir);
+        verbs.clear();
+        sleeps = 0;
+    };
+    framesync::FrameSwitchHooks hooks;
+    hooks.service = [&](const std::string& verb) {
+        verbs.push_back(verb);
+        if (verb == "stop") {
+            if (!stopWorks) return false;
+            writeAll(usersFile, quitWrite);
+        }
+        if (verb == "start" && !startWorks) return false;
+        if (verb == "start" && rotates) {
+            std::filesystem::rename(logFile, logFile + ".previous");
+            writeAll(logFile, logsOn ? kBravoLogon : "");
+        } else if (verb == "start" && logsOn) {
+            std::ofstream(logFile, std::ios::app) << kBravoLogon;
+        }
+        return true;
+    };
+    hooks.sleep = [&](double) {
+        ++sleeps;
+        return !quitting;
+    };
+    hooks.gameRunning = [&] { return game; };
+    std::string message;
+    reset();
+    CHECK(framesync::switchFrameSteam(paths, "76561198000000001", hooks, message) && verbs.empty());  // already it
+    CHECK(!framesync::switchFrameSteam(paths, "76561198000000003", hooks, message) && verbs.empty());
+    CHECK(message == tr(Tx::SyncFrameNoAccount));
+    game = true;
+    CHECK(!framesync::switchFrameSteam(paths, "76561198000000002", hooks, message) && verbs.empty());
+    CHECK(message == tr(Tx::SyncFrameGame));
+    game = false;
+
+    // Done: Steam stopped, both files changed (from what it wrote as it quit), backed up, started, logged on
+    message.clear();
+    CHECK(framesync::switchFrameSteam(paths, "76561198000000002", hooks, message) && message.empty());
+    CHECK(verbs == std::vector<std::string>({"stop", "start"}) && sleeps == 1);
+    CHECK(framesync::currentSteamId(framesync::parseLoginUsers(readAll(usersFile))) == "76561198000000002");
+    CHECK(readAll(usersFile).size() == quitWrite.size());
+    CHECK(readAll(paths.registryFile).find("\"bravo_acct\"") != std::string::npos);
+    CHECK(readAll(paths.backupDir + "/loginusers.vdf") == quitWrite);
+    CHECK(readAll(paths.backupDir + "/registry.vdf") == kRegistry);
+
+    // No logon in a minute: says so (the files stay changed: Steam may still be logging on)
+    reset();
+    logsOn = false;
+    CHECK(!framesync::switchFrameSteam(paths, "76561198000000002", hooks, message));
+    CHECK(message == tr(Tx::SyncFrameNoLogon) && sleeps == static_cast<int>(framesync::kFrameLogonLimitSec));
+    // An old logon line of that account (before the start) doesn't count
+    reset();
+    writeAll(logFile, log + kBravoLogon);
+    CHECK(!framesync::switchFrameSteam(paths, "76561198000000002", hooks, message) && message == tr(Tx::SyncFrameNoLogon));
+    logsOn = true;
+    // Quitting while waiting
+    reset();
+    quitting = true;
+    logsOn = false;
+    CHECK(!framesync::switchFrameSteam(paths, "76561198000000002", hooks, message) && message == tr(Tx::SyncQuitting));
+    CHECK(sleeps == 1);
+    quitting = false;
+    logsOn = true;
+    // The stop fails: Steam is started again, nothing changed
+    reset();
+    stopWorks = false;
+    CHECK(!framesync::switchFrameSteam(paths, "76561198000000002", hooks, message) && message == tr(Tx::SyncFrameStop));
+    CHECK(verbs == std::vector<std::string>({"stop", "start"}) && readAll(usersFile) == kLoginUsers &&
+          readAll(paths.registryFile) == kRegistry);
+    stopWorks = true;
+    // A registry.vdf without AutoLoginUser: refused before Steam is touched
+    reset();
+    writeAll(paths.registryFile, "\"Registry\" { }");
+    CHECK(!framesync::switchFrameSteam(paths, "76561198000000002", hooks, message) && message == tr(Tx::SyncFrameFiles));
+    CHECK(verbs.empty() && readAll(usersFile) == kLoginUsers);
+    // Steam's quit-write unreadable: Steam started again unchanged, says so
+    reset();
+    hooks.service = [&, inner = hooks.service](const std::string& verb) {
+        const bool r = inner(verb);
+        if (verb == "stop") writeAll(usersFile, "garbage");
+        return r;
+    };
+    CHECK(!framesync::switchFrameSteam(paths, "76561198000000002", hooks, message) && message == tr(Tx::SyncFrameFiles));
+    CHECK(verbs == std::vector<std::string>({"stop", "start"}) && readAll(paths.registryFile) == kRegistry);
+    hooks.service = [&](const std::string& verb) {
+        verbs.push_back(verb);
+        if (verb == "stop") writeAll(usersFile, quitWrite);
+        if (verb == "start" && !startWorks) return false;
+        if (verb == "start" && rotates) {
+            std::filesystem::rename(logFile, logFile + ".previous");
+            writeAll(logFile, logsOn ? kBravoLogon : "");
+        } else if (verb == "start" && logsOn) {
+            std::ofstream(logFile, std::ios::app) << kBravoLogon;
+        }
+        return true;
+    };
+    // The start fails: says so
+    reset();
+    startWorks = false;
+    CHECK(!framesync::switchFrameSteam(paths, "76561198000000002", hooks, message) && message == tr(Tx::SyncFrameStart));
+    startWorks = true;
+    // A new log at the start, longer than the old one at once: the logon in it still counts
+    reset();
+    writeAll(logFile, "x\n");
+    rotates = true;
+    message.clear();
+    CHECK(framesync::switchFrameSteam(paths, "76561198000000002", hooks, message) && message.empty());
+    rotates = false;
+    // An account whose login Steam doesn't remember: refused before Steam is touched
+    reset();
+    std::string noRemember = kLoginUsers;
+    const size_t bravo = noRemember.find("\"bravo_acct\"");
+    const size_t remember = noRemember.find("\"RememberPassword\"\t\t\"1\"", bravo);
+    noRemember.replace(remember, std::strlen("\"RememberPassword\"\t\t\"1\""), "\"RememberPassword\"\t\t\"0\"");
+    writeAll(usersFile, noRemember);
+    CHECK(!framesync::switchFrameSteam(paths, "76561198000000002", hooks, message) && message == tr(Tx::SyncFrameNoPassword));
+    CHECK(verbs.empty());
+    std::filesystem::remove_all(dir);
+}
+
 // ---- Frame Sync's files and status ----
 
 // Whether Frame Sync is set up at all (the 기기 page leaves it out otherwise): looked at, not read
@@ -433,6 +647,7 @@ struct FakeSync : SyncService {
     void startSync(const std::string& id) override { calls.push_back("sync " + id); }
     void answerGame(bool yes) override { calls.push_back(yes ? "answer yes" : "answer no"); }
     void shutdownPc() override { calls.push_back("shutdown"); }
+    void switchFrame(const std::string& id) override { calls.push_back("frame " + id); }
     std::vector<SyncEvent> take() override {
         std::vector<SyncEvent> t;
         t.swap(pending);
@@ -780,6 +995,29 @@ void testBackendSync() {
     CHECK(!model.sync.busy && model.sync.message == tr(Tx::SyncCancelled) && model.sync.messageError);
     CHECK(sync.count("refresh") == 3);  // at once after a run
 
+    // From the list: the Frame's question; 바꾸기 goes to the service; its end shows and polls again
+    model.sync.frameAccounts = {{"76561190000000001", "a", "Alpha"}};
+    model.sync.frameId = "76561190000000009";
+    model.startSync("76561190000000001", true);
+    backend.tick(now = 133.5);
+    done.ok = true;
+    done.message.clear();
+    sync.pending.push_back(done);
+    backend.tick(now = 133.6);
+    CHECK(model.sync.question == SyncState::Question::Frame && !model.sync.busy);
+    model.answer(true);
+    backend.tick(now = 133.7);
+    CHECK(sync.calls.back() == "frame 76561190000000001" && model.sync.busy);
+    const int pollsBefore = sync.count("refresh");
+    SyncEvent frameDone;
+    frameDone.kind = SyncEvent::Kind::FrameSwitched;
+    frameDone.ok = true;
+    sync.pending.push_back(refresh);  // the poll after the PC's switch answered
+    sync.pending.push_back(frameDone);
+    backend.tick(now = 133.8);
+    CHECK(!model.sync.busy && model.sync.message == tr(Tx::SyncFrameSwitched) && !model.sync.messageError);
+    CHECK(sync.count("refresh") == pollsBefore + 1);
+
     // The PC's 끄기 and its answer
     model.sync.reach = framesync::Reach::On;
     model.askShutdown();
@@ -822,6 +1060,7 @@ int main() {
     testThrottle();
     testNameOwner();
     testFrameSteam();
+    testFrameSteamSwitch();
     testSyncPresent();
     testSyncFiles();
     testBackendSound();

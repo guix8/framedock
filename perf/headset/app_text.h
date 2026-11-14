@@ -120,6 +120,18 @@ enum class Tx {
     SyncAskShutdown,
     SyncTurnOff,
     SyncSwitchedFromList,
+    SyncAskFrame,         ///< "프레임도 {0} 계정으로 바꿀까요? …"
+    SyncSwitchFrame,
+    SyncFrameSwitching,
+    SyncFrameSwitched,
+    SyncFrameNoAccount,
+    SyncFrameGame,
+    SyncFrameFiles,
+    SyncFrameFilesHalf,   ///< "… 백업: {0}"
+    SyncFrameNoPassword,
+    SyncFrameStop,
+    SyncFrameStart,
+    SyncFrameNoLogon,
     SyncUnreachable,
     SyncAuth,
     SyncLogin,

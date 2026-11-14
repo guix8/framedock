@@ -3,6 +3,7 @@
 
 #include "atomic_file.h"
 #include "frame_steam.h"
+#include "frame_steam_switch.h"
 
 #include <unistd.h>
 
@@ -110,6 +111,10 @@ void FrameSyncWorker::shutdownPc() {
     post({Job::Shutdown, {}});
 }
 
+void FrameSyncWorker::switchFrame(const std::string& steamId) {
+    post({Job::SwitchFrame, steamId});
+}
+
 void FrameSyncWorker::answerGame(bool yes) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -152,6 +157,7 @@ void FrameSyncWorker::run() {
             case Job::Refresh: doRefresh(); break;
             case Job::Sync: doSync(command.id); break;
             case Job::Shutdown: doShutdown(); break;
+            case Job::SwitchFrame: doSwitchFrame(command.id); break;
         }
     }
 }
@@ -291,4 +297,20 @@ void FrameSyncWorker::doShutdown() {
     }
     if (stop_) return;
     emit(std::move(event));
+}
+
+void FrameSyncWorker::doSwitchFrame(const std::string& target) {
+    framesync::FrameSwitchPaths paths = framesync::FrameSwitchPaths::defaults();
+    paths.steamDir = paths_.steamDir;
+    framesync::FrameSwitchHooks hooks;
+    hooks.service = [](const std::string& verb) { return framesync::steamServiceCommand(verb, 60); };
+    hooks.sleep = [this](double seconds) { return sleepFor(seconds); };
+    hooks.gameRunning = [] { return framesync::frameGameRunning(); };
+    SyncEvent done;
+    done.kind = SyncEvent::Kind::FrameSwitched;
+    done.ok = framesync::switchFrameSteam(paths, target, hooks, done.message);
+    std::fprintf(stderr, "[frame-sync] The Frame's switch %s%s\n", done.ok ? "done" : "failed: ", done.message.c_str());
+    if (stop_) return;
+    emit(std::move(done));
+    doSetup();  // the Frame's account changed: the big button and the list follow
 }

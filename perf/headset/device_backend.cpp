@@ -161,6 +161,9 @@ void DeviceBackend::handle(const DeviceAction& action, double now) {
         case Kind::ShutdownPc:
             if (sync_) sync_->shutdownPc();
             break;
+        case Kind::SwitchFrame:
+            if (sync_) sync_->switchFrame(action.id);
+            break;
     }
 }
 
@@ -211,6 +214,10 @@ void DeviceBackend::applySync(const SyncEvent& event, double now) {
         case SyncEvent::Kind::Finished:
             model_.syncFinished(event.ok, event.message);
             nextRefresh_ = now;  // app.py's _finish refreshes at once
+            break;
+        case SyncEvent::Kind::FrameSwitched:
+            model_.frameSwitchFinished(event.ok, event.message);
+            nextRefresh_ = now;
             break;
         case SyncEvent::Kind::Message: model_.showMessage(event.message, event.messageError); break;
     }

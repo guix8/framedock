@@ -78,6 +78,10 @@ SyncScreen syncScreen(const SyncState& state) {
     } else if (state.question == SyncState::Question::Shutdown) {
         screen.question = tr(Tx::SyncAskShutdown);
         screen.yesText = tr(Tx::SyncTurnOff);
+    } else if (state.question == SyncState::Question::Frame) {
+        const std::string name = nameOf(state.targetId);
+        screen.question = trf(Tx::SyncAskFrame, {name.empty() ? state.targetId : name});
+        screen.yesText = tr(Tx::SyncSwitchFrame);
     }
     screen.message = state.message;
     screen.messageError = state.messageError;
@@ -124,7 +128,14 @@ void DeviceModel::syncFinished(bool ok, const std::string& message) {
     sync.step.reset();
     sync.waking = false;
     if (sync.question == SyncState::Question::Game) sync.question = SyncState::Question::None;
-    if (ok && sync.fromList) {
+    const bool onFrame = std::any_of(sync.frameAccounts.begin(), sync.frameAccounts.end(),
+                                     [this](const framesync::FrameAccount& a) { return a.steamId == sync.targetId; });
+    if (ok && sync.fromList && onFrame && sync.targetId != sync.frameId) {
+        // The Frame can follow: asked on the question line (its Steam restarts)
+        sync.question = SyncState::Question::Frame;
+        sync.message.clear();
+        sync.messageError = false;
+    } else if (ok && sync.fromList) {
         sync.message = tr(Tx::SyncSwitchedFromList);
         sync.messageError = false;
     } else if (ok) {
@@ -134,6 +145,13 @@ void DeviceModel::syncFinished(bool ok, const std::string& message) {
         sync.message = message;
         sync.messageError = true;
     }
+    ++revision_;
+}
+
+void DeviceModel::frameSwitchFinished(bool ok, const std::string& message) {
+    sync.busy = false;
+    sync.message = ok ? std::string(tr(Tx::SyncFrameSwitched)) : message;
+    sync.messageError = !ok;
     ++revision_;
 }
 
@@ -199,10 +217,12 @@ void DeviceModel::setPassthrough(PassthroughMode mode) {
 void DeviceModel::startSync(const std::string& steamId, bool fromList) {
     if (sync.busy || steamId.empty() || !sync.configured) return;
     if (sync.question == SyncState::Question::Shutdown) answer(false);
+    if (sync.question == SyncState::Question::Frame) sync.question = SyncState::Question::None;
     const auto names = sync.names();
     const auto it = names.find(steamId);
     sync.busy = true;
     sync.busyName = it != names.end() ? it->second : std::string();
+    sync.targetId = steamId;
     sync.step.reset();
     sync.waking = false;
     sync.fromList = fromList;
@@ -215,6 +235,10 @@ void DeviceModel::startSync(const std::string& steamId, bool fromList) {
 
 void DeviceModel::askShutdown() {
     if (sync.reach != Reach::On || sync.errorKind != ErrorKind::None || sync.busy) return;
+    if (sync.question == SyncState::Question::Frame) {
+        sync.message = tr(Tx::SyncSwitchedFromList);  // the Frame's question gives way: the reminder stays
+        sync.messageError = false;
+    }
     sync.question = SyncState::Question::Shutdown;
     ++revision_;
 }
@@ -228,6 +252,15 @@ void DeviceModel::answer(bool yes) {
         queue(action);
     } else if (question == SyncState::Question::Shutdown && yes) {
         queue(DeviceAction(DeviceAction::Kind::ShutdownPc));
+    } else if (question == SyncState::Question::Frame && yes && !sync.busy) {
+        sync.busy = true;
+        sync.message = tr(Tx::SyncFrameSwitching);
+        sync.messageError = false;
+        queue(DeviceAction(DeviceAction::Kind::SwitchFrame, sync.targetId));
+    } else if (question == SyncState::Question::Frame) {
+        sync.message = tr(Tx::SyncSwitchedFromList);  // 취소: as before, by hand
+        sync.messageError = false;
+        ++revision_;
     } else {
         ++revision_;
     }
