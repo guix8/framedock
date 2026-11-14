@@ -1328,7 +1328,8 @@ void testFrameStream() {
             CHECK(sameIn(pc, same, w, 0, 0, w, 8 + 30));       // the title row
             CHECK(!sameIn(pc, same, w, 100, 8 + 30, 202, 8 + 60));
             CHECK(!sameIn(pc, noHelper, w, 210, 18, 498, 102));  // not the headset's 90 fps line
-            // The helper without frames (the headset idle): the headset's again
+            // The helper without frames (a loading screen, the headset idle): still the PC's card, its numbers
+            // missing (not the headset's values and back, which would clear the graphs each time)
             const auto idle = [&](int i, double t) {
                 MetricStore st = frameStreamStore(StreamState::Helper, i, t);
                 for (uint16_t id : {metric::kPcFps, metric::kPcMissedPct, metric::kPcGpuMs, metric::kPcGpuMaxMs,
@@ -1337,7 +1338,9 @@ void testFrameStream() {
                 }
                 return st;
             };
-            CHECK(renderLive(frame, l.language, 30, idle, "") == old);
+            const std::vector<uint8_t> idleCard = renderLive(frame, l.language, 30, idle, "");
+            CHECK(idleCard != old && idleCard != pc);
+            CHECK(sameIn(idleCard, pc, w, 0, 0, w, 8 + 30));  // the title row with its PC size
         }
     }
 

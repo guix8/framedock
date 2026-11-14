@@ -201,6 +201,8 @@ public:
     static constexpr int kMaxPeers = 3;  ///< addresses tried per read
     /** A helper that answered keeps its last values this long while requests fail (then kRetrySec applies). */
     static constexpr double kHoldSec = 3.0;
+    /** ... and counts as the helper, without values, this long after its last answer (one kRetrySec and a half). */
+    static constexpr double kKnownSec = 22.0;
 
     /**
      * Sets up libcurl: construct on the main thread.
@@ -232,6 +234,7 @@ private:
     Reading good_;           ///< the helper's last answer, shown for kHoldSec while it doesn't answer
     double goodAt_ = 0;
     bool haveGood_ = false;
+    double knownAt_ = -1e300;  ///< when the helper last gave its values (kKnownSec)
     bool wasStreaming_ = false;  ///< the read before this one was a stream's
     AfterStream after_;
     std::string statePeer_;  ///< the PC that answered /v2/state during the stream: asked for its summary afterwards

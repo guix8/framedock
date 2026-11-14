@@ -535,13 +535,14 @@ void testStreamRead() {
     CHECK(r.stream == static_cast<uint32_t>(StreamState::Helper));  // still held
     helper.takeAsked();
     const double gaveUp = 132.5 + RenderSizeReader::kHoldSec;
+    // ...without values, but still "the helper" for kKnownSec, so the cards keep their shape
     r = reader.read(gaveUp, 0);
-    CHECK(r.stream == static_cast<uint32_t>(StreamState::NoHelper) && r.source == 0 && std::isnan(r.pingMs) &&
+    CHECK(r.stream == static_cast<uint32_t>(StreamState::Helper) && r.source == 0 && std::isnan(r.pingMs) &&
           std::isnan(r.pc.fps));
     CHECK((helper.takeAsked() == Asked {"/v2/state", "/render"}));
     helper.setMode(FakeHelper::Mode::New);
     r = reader.read(gaveUp + 5, 0);
-    CHECK(r.stream == static_cast<uint32_t>(StreamState::NoHelper));
+    CHECK(r.stream == static_cast<uint32_t>(StreamState::Helper) && std::isnan(r.pc.fps));
     CHECK(helper.takeAsked().empty());  // within the 15 s
     r = reader.read(gaveUp + RenderSizeReader::kRetrySec, 0);
     CHECK(r.stream == static_cast<uint32_t>(StreamState::Helper) && r.pingMs > 0);

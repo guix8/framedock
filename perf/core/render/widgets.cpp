@@ -466,10 +466,12 @@ bool hasGraph(WidgetType type) {
 /**
  * Whether the Frame card shows the PC's values (2026-11-15): during a PC stream with the helper's, the game's fps
  * and frame times on the PC (the headset's own are then those of showing the video: 90 fps while the game makes 60).
- * Standalone, without a helper, with an old one, or while the helper has no frames: the headset's, as ever.
+ * Standalone, without a helper or with an old one: the headset's, as ever. By the state alone: while the helper has
+ * no frames (a loading screen, the headset idle) the PC's numbers are simply missing and the graphs have a gap,
+ * instead of the card going over to the headset's values and back (which cleared its graphs each time).
  */
 bool framePc(const WidgetContext& ctx) {
-    return static_cast<StreamState>(i(ctx, kStreamState)) == StreamState::Helper && ok(ctx, kPcFps);
+    return static_cast<StreamState>(i(ctx, kStreamState)) == StreamState::Helper;
 }
 
 void drawFrame(const Pen& pen, double x, double y, const WidgetInstance& w, const WidgetContext& ctx,

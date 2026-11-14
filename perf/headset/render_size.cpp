@@ -343,6 +343,7 @@ Reading RenderSizeReader::read(double now, int scenePid) {
     // Standalone: the next stream starts with nothing of the last one's (the address stays as a first guess)
     ping_.clear();
     haveGood_ = false;
+    knownAt_ = -1e300;
     Reading r = readLayer(scenePid);
     if (after_.ask(now)) askLast();
     r.last = summary_;
@@ -412,12 +413,19 @@ bool RenderSizeReader::askPeer(const std::string& peer, double now, Reading& r) 
 Reading RenderSizeReader::readPc(double now) {
     Reading r;
     r.stream = static_cast<uint32_t>(frame_perf_overlay::StreamState::NoHelper);
-    if (now < nextPcTry_) return r;
+    // A helper that gave its values lately and is silent now is still "the helper" for kKnownSec, without values:
+    // the cards keep their shape (the PC stream card its height, the Frame card its PC graphs, with a gap)
+    const auto silent = [&]() {
+        if (now - knownAt_ <= kKnownSec) r.stream = static_cast<uint32_t>(frame_perf_overlay::StreamState::Helper);
+        return r;
+    };
+    if (now < nextPcTry_) return silent();
     if (!peer_.empty()) {
         if (askPeer(peer_, now, r)) {
             good_ = r;
             goodAt_ = now;
             haveGood_ = true;
+            if (r.stream == static_cast<uint32_t>(frame_perf_overlay::StreamState::Helper)) knownAt_ = now;
             return r;
         }
         // One late answer on a Wi-Fi busy with the stream isn't "no helper": the last values stay for kHoldSec
@@ -435,11 +443,12 @@ Reading RenderSizeReader::readPc(double now) {
             good_ = r;
             goodAt_ = now;
             haveGood_ = true;
+            if (r.stream == static_cast<uint32_t>(frame_perf_overlay::StreamState::Helper)) knownAt_ = now;
             return r;
         }
     }
     nextPcTry_ = now + kRetrySec;  // no helper there (not installed, or the firewall drops)
-    return r;
+    return silent();
 }
 
 Reading RenderSizeReader::readLayer(int scenePid) const {

@@ -258,7 +258,9 @@ namespace FrameDockPc
             bool fresh = r.PcSampled && (DateTime.UtcNow - r.FrameAt).TotalSeconds < 5;
             // The last session, looked for now: the headset goes by which session an answer names (the one before its
             // stream, then the stream's own once it has ended), so an answer never names an older one than there is
-            try { r.Sessions.Poll(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            try { r.Sessions.Poll(); }
+            catch (IOException) { } catch (UnauthorizedAccessException) { }
+            catch (ArgumentException) { } catch (NotSupportedException) { }  // a Steam path that isn't one
             return State(log, r.Vr.Attached, r.Vr.DisplayHz, fresh ? r.Frame : null, (DateTime.UtcNow - r.FrameAt).TotalMilliseconds,
                          r.PcSampled ? r.Pc.CpuPct : null, r.PcSampled ? r.Pc.GpuPct : null, r.PcSampled ? r.Pc.GpuTempC : null,
                          r.PcSampled ? r.Pc.VramUsedMb : null, r.PcSampled ? r.Pc.VramTotalMb : null, r.Sessions.Last);
@@ -280,7 +282,9 @@ namespace FrameDockPc
                 readings.Vr.Tick(wanted);
                 if (DateTime.UtcNow >= nextPoll)
                 {
-                    try { follower.Poll(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                    try { follower.Poll(); }
+                    catch (IOException) { } catch (UnauthorizedAccessException) { }
+                    catch (ArgumentException) { } catch (NotSupportedException) { }
                     if (wanted)
                     {
                         readings.Pc.Sample();
