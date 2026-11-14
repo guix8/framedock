@@ -111,6 +111,7 @@ struct WidgetHistory {
     History b;  ///< second series (GPU °C)
     History c;  ///< Frame: worst CPU frame time per read (ms), for its graphs with Compact off; PC stream: the PC's
     History d;  ///< Frame: worst GPU frame time per read (ms); PC stream: the PC's
+    bool pc = false;  ///< Frame: its series hold the PC's values (a stream with the helper's), not the headset's
 };
 
 /** A throughput as text, value and unit apart so they can be styled differently. */

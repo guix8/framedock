@@ -463,6 +463,15 @@ bool hasGraph(WidgetType type) {
 
 // ---- Widgets ----
 
+/**
+ * Whether the Frame card shows the PC's values (2026-11-15): during a PC stream with the helper's, the game's fps
+ * and frame times on the PC (the headset's own are then those of showing the video: 90 fps while the game makes 60).
+ * Standalone, without a helper, with an old one, or while the helper has no frames: the headset's, as ever.
+ */
+bool framePc(const WidgetContext& ctx) {
+    return static_cast<StreamState>(i(ctx, kStreamState)) == StreamState::Helper && ok(ctx, kPcFps);
+}
+
 void drawFrame(const Pen& pen, double x, double y, const WidgetInstance& w, const WidgetContext& ctx,
                const WidgetHistory& h) {
     const Thresholds& th = ctx.thresholds;
@@ -470,7 +479,9 @@ void drawFrame(const Pen& pen, double x, double y, const WidgetInstance& w, cons
     const double cx = x + kInX;
     const double top = y + kTop;
     const double hz = f(ctx, kFrameDisplayHz);
-    const double fps = f(ctx, kFrameAppFps);
+    const bool pc = framePc(ctx);
+    const uint16_t fpsId = pc ? kPcFps : kFrameAppFps;
+    const double fps = f(ctx, fpsId);
     const double targetMs = hz > 0 ? 1000.0 / hz : std::nan("");
     const auto msLevel = [&](double ms) {
         return levelOf(ms, targetMs * th.frameWarnRatio, targetMs * th.frameCritRatio);
@@ -482,7 +493,7 @@ void drawFrame(const Pen& pen, double x, double y, const WidgetInstance& w, cons
         if (i(ctx, kFrameRenderSource) == static_cast<int64_t>(RenderSource::Pc)) size += std::string(" ") + t.renderPc;
         pen.text(x + kGraphX - 8, top + 17, size, 13, kTextMuted, false, true);
     }
-    if (!ok(ctx, kFrameAppFps)) {
+    if (!ok(ctx, fpsId)) {
         drawBigValue(pen, cx, top + 52, "--", "fps", kTextMuted);
         const Reason why = reasonOf(ctx, kFrameAppFps);
         const std::string note = why == Reason::NoSteamVr ? std::string(t.noSteamVr)
@@ -493,9 +504,12 @@ void drawFrame(const Pen& pen, double x, double y, const WidgetInstance& w, cons
         const Level fpsLevel = hz > 0 ? levelOf(fps, hz * th.fpsWarnRatio, hz * th.fpsCritRatio, true) : Level::Normal;
         pen.dot(cx + 4, top + 42, kAccent);
         const double bigWidth = drawBigValue(pen, cx + 14, top + 52, num(fps, 0), "fps", colorOf(fpsLevel));
-        if (hz > 0) pen.text(cx + 14 + bigWidth + 6, top + 52, "/ " + num(hz, 0) + "Hz", 14, kTextMuted);
-        const double gpuMs = f(ctx, kFrameGpuMs);
-        const double cpuMs = f(ctx, kFrameCpuMs);
+        double hzWidth = 0;
+        if (hz > 0) hzWidth = 6 + pen.text(cx + 14 + bigWidth + 6, top + 52, "/ " + num(hz, 0) + "Hz", 14, kTextMuted);
+        // The PC's fps and frame times: a small "PC" says so, as on Simple A
+        if (pc) pen.text(cx + 14 + bigWidth + hzWidth + 6, top + 52, t.renderPc, 13, kTextMuted);
+        const double gpuMs = f(ctx, pc ? kPcGpuMs : kFrameGpuMs);
+        const double cpuMs = f(ctx, pc ? kPcCpuMs : kFrameCpuMs);
         double lx = cx + 14;
         lx += pen.text(lx, top + 72, "GPU " + num(gpuMs, 1), 15, colorOf(msLevel(gpuMs), kTextMuted));
         lx += pen.text(lx, top + 72, "  CPU " + num(cpuMs, 1), 15, colorOf(msLevel(cpuMs), kTextMuted));
@@ -530,7 +544,8 @@ void drawFrame(const Pen& pen, double x, double y, const WidgetInstance& w, cons
         uint16_t avgId, maxId;
         const History* history;
         Color color;
-    } kTimes[] = {{"CPU ", kFrameCpuMs, kFrameCpuMaxMs, &h.c, kAccent}, {"GPU ", kFrameGpuMs, kFrameGpuMaxMs, &h.d, kGpu}};
+    } kTimes[] = {{"CPU ", pc ? kPcCpuMs : kFrameCpuMs, pc ? kPcCpuMaxMs : kFrameCpuMaxMs, &h.c, kAccent},
+                  {"GPU ", pc ? kPcGpuMs : kFrameGpuMs, pc ? kPcGpuMaxMs : kFrameGpuMaxMs, &h.d, kGpu}};
     for (int k = 0; k < 2; ++k) {
         const GraphArea times = frameTimesArea(x, y, k, msMax, ctx);
         const double avg = f(ctx, kTimes[k].avgId);
@@ -1670,12 +1685,22 @@ void drawWidgetStatic(const Pen& pen, double x, double y, const WidgetInstance& 
 void pushWidgetHistory(const WidgetInstance& w, const WidgetContext& ctx, WidgetHistory& history) {
     const double keep = std::max(1, ctx.graphSeconds);
     switch (w.type) {
-        case WidgetType::Frame:
-            history.a.push(ctx.now, f(ctx, kFrameAppFps), keep);
+        case WidgetType::Frame: {
+            // The headset's values, or during a PC stream with the helper's the PC's (framePc). One line never holds
+            // both: when that changes (a stream starts or ends, the helper comes or goes) the graphs start again
+            const bool pc = framePc(ctx);
+            if (pc != history.pc) {
+                history.a.clear();
+                history.c.clear();
+                history.d.clear();
+                history.pc = pc;
+            }
+            history.a.push(ctx.now, f(ctx, pc ? kPcFps : kFrameAppFps), keep);
             // Kept while compact too, so turning Compact off shows full graphs at once
-            history.c.push(ctx.now, f(ctx, kFrameCpuMaxMs), keep);
-            history.d.push(ctx.now, f(ctx, kFrameGpuMaxMs), keep);
+            history.c.push(ctx.now, f(ctx, pc ? kPcCpuMaxMs : kFrameCpuMaxMs), keep);
+            history.d.push(ctx.now, f(ctx, pc ? kPcGpuMaxMs : kFrameGpuMaxMs), keep);
             break;
+        }
         case WidgetType::GpuRam: history.a.push(ctx.now, f(ctx, kGpuBusyPct), keep); break;
         case WidgetType::Power: history.a.push(ctx.now, f(ctx, kPowerVphW), keep); break;
         case WidgetType::Temp:

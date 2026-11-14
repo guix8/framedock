@@ -1171,6 +1171,126 @@ void testPcStreamCard() {
     CHECK(!r.render(c));
 }
 
+/** streamStore with the headset's own frame times (the Frame card's), as update i of a live render */
+MetricStore frameStreamStore(StreamState state, int i, double t) {
+    MetricStore st = state == StreamState::Helper ? liveStreamStore(i, t) : streamStore(state, t);
+    st.setF32(metric::kFrameAppFps, 90 - 2 * (i % 3), t);
+    st.setF32(metric::kFrameGpuMs, 3.4, t);
+    st.setF32(metric::kFrameCpuMs, 2.1, t);
+    st.setF32(metric::kFrameGpuMaxMs, 4.0 + 0.5 * (i % 4), t);
+    st.setF32(metric::kFrameCpuMaxMs, 2.6 + 0.4 * (i % 5), t);
+    st.setI32(metric::kFrameDropped, 0, t);
+    return st;
+}
+
+// The Frame card during a PC stream (2026-11-15): with the helper's values the game's fps and frame times on the PC
+// and a small "PC"; else the headset's, standalone pixel for pixel what it drew before. Panel pixels as
+// testPcStreamCard's: the fps graph x 210-498 y 18-102, with Compact off the frame times' label line y 110-130 and
+// their graphs y 132-192
+void testFrameStream() {
+    const int w = 512;
+    const auto of = [](StreamState state) {
+        return [state](int i, double t) { return frameStreamStore(state, i, t); };
+    };
+    // What the card read before there was a stream's state: the headset's frame timing and the render size
+    const auto before = [](int i, double t) {
+        MetricStore full = frameStreamStore(StreamState::None, i, t);
+        MetricStore st;
+        for (uint16_t id = metric::kFrameAppFps; id <= metric::kFrameRenderSource; ++id) {
+            const MetricValue* v = full.get(id);
+            if (v == nullptr || !v->ok) {
+                st.setNa(id, v != nullptr ? v->reason : Reason::NotSampledYet, t);
+            } else if (findMetric(id)->type == WireType::F32) {
+                st.setF32(id, v->f32, t);
+            } else if (findMetric(id)->type == WireType::I32) {
+                st.setI32(id, v->i32, t);
+            } else {
+                st.setEnum(id, v->enumValue, t);
+            }
+        }
+        return st;
+    };
+    const struct {
+        WidgetLanguage language;
+        const char* tag;
+    } kLanguages[] = {{WidgetLanguage::Ko, "ko"}, {WidgetLanguage::En, "en"}, {WidgetLanguage::Ja, "ja"}};
+    for (const bool compact : {false, true}) {
+        const Layout frame = oneWidget(inst(W::Frame, compact));
+        const int h = compact ? 118 : 210;
+        for (const auto& l : kLanguages) {
+            const std::string tag = std::string(compact ? "_compact_" : "_") + l.tag + ".png";
+            // Standalone: exactly the card as it was, graphs and all
+            const Pixels standalone = renderLive(frame, l.language, 30, of(StreamState::None), "frame_standalone" + tag);
+            CHECK(standalone == renderLive(frame, l.language, 30, before, ""));
+            // A stream without a helper: the headset's values as ever (the Frame card says nothing about the stream)
+            const Pixels noHelper = renderLive(frame, l.language, 30, of(StreamState::NoHelper), "frame_stream_nohelper" + tag);
+            CHECK(noHelper == standalone);
+            // An old helper: the render size from the PC, nothing else
+            const Pixels old = renderLive(frame, l.language, 30, of(StreamState::OldHelper), "");
+            CHECK(sameIn(old, noHelper, w, 0, 8 + 30, w, h) && sameIn(old, noHelper, w, 210, 0, w, h));
+            // With the helper's values: the game's fps and its graph, the frame times, and "PC"
+            const Pixels pc = renderLive(frame, l.language, 30, of(StreamState::Helper), "frame_stream_pc" + tag);
+            const auto asHeadset = [&](int i, double t) {  // the same numbers as a standalone game's
+                MetricStore src = frameStreamStore(StreamState::Helper, i, t);
+                MetricStore st = frameStreamStore(StreamState::OldHelper, i, t);
+                st.setF32(metric::kFrameAppFps, src.f32Or(metric::kPcFps, 0), t);
+                st.setF32(metric::kFrameGpuMs, src.f32Or(metric::kPcGpuMs, 0), t);
+                st.setF32(metric::kFrameCpuMs, src.f32Or(metric::kPcCpuMs, 0), t);
+                st.setF32(metric::kFrameGpuMaxMs, src.f32Or(metric::kPcGpuMaxMs, 0), t);
+                st.setF32(metric::kFrameCpuMaxMs, src.f32Or(metric::kPcCpuMaxMs, 0), t);
+                return st;
+            };
+            const Pixels same = renderLive(frame, l.language, 30, asHeadset, "");
+            CHECK(pc != same);                                 // the "PC" after "/ 90Hz"
+            CHECK(sameIn(pc, same, w, 210, 0, w, h));          // the fps graph
+            CHECK(sameIn(pc, same, w, 0, 8 + 60, w, h));       // the frame times, the reprojection, the lower graphs
+            CHECK(sameIn(pc, same, w, 0, 0, w, 8 + 30));       // the title row
+            CHECK(!sameIn(pc, same, w, 100, 8 + 30, 202, 8 + 60));
+            CHECK(!sameIn(pc, noHelper, w, 210, 18, 498, 102));  // not the headset's 90 fps line
+            // The helper without frames (the headset idle): the headset's again
+            const auto idle = [&](int i, double t) {
+                MetricStore st = frameStreamStore(StreamState::Helper, i, t);
+                for (uint16_t id : {metric::kPcFps, metric::kPcMissedPct, metric::kPcGpuMs, metric::kPcGpuMaxMs,
+                                    metric::kPcCpuMs, metric::kPcCpuMaxMs}) {
+                    st.setNa(id, Reason::NoFrames, t);
+                }
+                return st;
+            };
+            CHECK(renderLive(frame, l.language, 30, idle, "") == old);
+        }
+    }
+
+    // One line never mixes the headset's samples with the PC's: when the card changes over, its graphs start again
+    const Layout frame = oneWidget(inst(W::Frame, false));
+    const auto render = [&](GridRenderer& r, const MetricStore& st, double now) {
+        WidgetContext ctx;
+        ctx.store = &st;
+        ctx.now = now;
+        ctx.language = WidgetLanguage::Ko;
+        r.render(ctx);
+        return r.toRgba();
+    };
+    GridRenderer changing(fonts());
+    changing.setLayout(frame);
+    for (int i = 0; i < 10; ++i) render(changing, frameStreamStore(StreamState::None, i, kNow - 10 + i), kNow - 10 + i);
+    const MetricStore first = frameStreamStore(StreamState::Helper, 0, kNow);
+    GridRenderer fresh(fonts());
+    fresh.setLayout(frame);
+    CHECK(render(changing, first, kNow) == render(fresh, first, kNow));  // the stream's first sample alone
+    const MetricStore second = frameStreamStore(StreamState::Helper, 1, kNow + 1);
+    CHECK(render(changing, second, kNow + 1) == render(fresh, second, kNow + 1));  // and from there a line again
+    // ...and back when the stream ends (or the helper stops answering)
+    const MetricStore after = frameStreamStore(StreamState::None, 2, kNow + 2);
+    GridRenderer fresh2(fonts());
+    fresh2.setLayout(frame);
+    CHECK(render(changing, after, kNow + 2) == render(fresh2, after, kNow + 2));
+    // While nothing changes over, the history stays (a fresh renderer draws less)
+    const MetricStore next = frameStreamStore(StreamState::None, 3, kNow + 3);
+    GridRenderer fresh3(fonts());
+    fresh3.setLayout(frame);
+    CHECK(render(changing, next, kNow + 3) != render(fresh3, next, kNow + 3));
+}
+
 }  // namespace
 
 // The Dock's highlight: an accent border in the panel's margin while a laser points at the HUD. A change repaints
@@ -1641,6 +1761,7 @@ int main() {
     testSimpleTemplates();
     testSimpleStream();
     testPcStreamCard();
+    testFrameStream();
     testHighlight();
     testControls();
     testFrameRenderSize();
