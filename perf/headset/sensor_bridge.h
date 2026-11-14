@@ -68,5 +68,4 @@ private:
     void refreshSceneApp(double now);
     /** The RenderSize source: the scene app here (OpenVR, main thread), the rest on the sampler's thread. */
     void registerRenderSize(frame_perf_overlay::Scheduler& scheduler, AsyncSampler* sampler);
-    void storeRenderSize(const SensorSample& s, double now);
 };

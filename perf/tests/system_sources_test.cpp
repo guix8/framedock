@@ -718,7 +718,132 @@ void testAsyncSampler() {
     }
 }
 
+// The RenderSize source's metrics: the stream's state is always a value; the PC helper's values only with /v2/state
+void testStoreRenderSize() {
+    using frame_perf_overlay::RenderSource;
+    using frame_perf_overlay::StreamState;
+    static constexpr uint16_t kPcIds[] = {
+        metric::kPcFps,      metric::kPcMissedPct, metric::kPcGpuMs,       metric::kPcGpuMaxMs,
+        metric::kPcCpuMs,    metric::kPcCpuMaxMs,  metric::kPcGpuPct,      metric::kPcGpuTempC,
+        metric::kPcVramUsedMib, metric::kPcVramTotalMib, metric::kPcCpuPct, metric::kPcLinkMbps,
+    };
+    // Standalone, a game: the size, state 0, nothing of a PC
+    {
+        MetricStore st;
+        SensorSample s;
+        s.renderWidth = 2400;
+        s.renderHeight = 2400;
+        s.renderSource = static_cast<uint32_t>(RenderSource::Headset);
+        storeRenderSize(st, s, false, 5.0);
+        CHECK(st.intOr(metric::kFrameRenderWidth, 0) == 2400);
+        ENUM_IS(st, metric::kStreamState, 0u);
+        for (const uint16_t id : kPcIds) NA_IS(st, id, Reason::NotConnected);
+        NA_IS(st, metric::kPcPingMs, Reason::NotConnected);
+    }
+    // Standalone, nothing known, no OpenVR: the size says so; the state is still 0
+    {
+        MetricStore st;
+        storeRenderSize(st, SensorSample(), true, 5.0);
+        NA_IS(st, metric::kFrameRenderWidth, Reason::NoSteamVr);
+        ENUM_IS(st, metric::kStreamState, 0u);
+        storeRenderSize(st, SensorSample(), false, 6.0);
+        NA_IS(st, metric::kFrameRenderSource, Reason::NotConnected);
+    }
+    // Streaming without a helper, and with an old one (the size and the ping only). Values left in the sample by
+    // mistake aren't stored
+    for (const StreamState state : {StreamState::NoHelper, StreamState::OldHelper}) {
+        MetricStore st;
+        SensorSample s;
+        s.streamState = static_cast<uint32_t>(state);
+        s.pcFps = 60;
+        s.pcGpuMs = 7;
+        s.pcPingMs = 2.5;
+        if (state == StreamState::OldHelper) {
+            s.renderWidth = s.renderHeight = 3048;
+            s.renderSource = static_cast<uint32_t>(RenderSource::Pc);
+        }
+        storeRenderSize(st, s, false, 5.0);
+        ENUM_IS(st, metric::kStreamState, static_cast<uint32_t>(state));
+        for (const uint16_t id : kPcIds) NA_IS(st, id, Reason::NotConnected);
+        if (state == StreamState::OldHelper) {
+            F32_IS(st, metric::kPcPingMs, 2.5);
+            CHECK(st.intOr(metric::kFrameRenderWidth, 0) == 3048);
+        } else {
+            NA_IS(st, metric::kPcPingMs, Reason::NotConnected);
+            NA_IS(st, metric::kFrameRenderWidth, Reason::NotConnected);
+        }
+    }
+    // With the helper's values
+    SensorSample full;
+    full.streamState = static_cast<uint32_t>(StreamState::Helper);
+    full.renderWidth = full.renderHeight = 3048;
+    full.renderSource = static_cast<uint32_t>(RenderSource::Pc);
+    full.pcFps = 45;
+    full.pcMissedPct = 50;
+    full.pcGpuMs = 6.79;
+    full.pcGpuMaxMs = 9.1;
+    full.pcCpuMs = 8;
+    full.pcCpuMaxMs = 21.7;
+    full.pcGpuPct = 56;
+    full.pcGpuTempC = 61;
+    full.pcVramUsedMiB = 4096;
+    full.pcVramTotalMiB = 16384;
+    full.pcCpuPct = 12.3;
+    full.pcLinkMbps = 350;
+    full.pcPingMs = 3.2;
+    {
+        MetricStore st;
+        storeRenderSize(st, full, false, 5.0);
+        ENUM_IS(st, metric::kStreamState, 3u);
+        F32_IS(st, metric::kPcFps, 45);
+        F32_IS(st, metric::kPcMissedPct, 50);
+        F32_IS(st, metric::kPcGpuMs, 6.79);
+        F32_IS(st, metric::kPcGpuMaxMs, 9.1);
+        F32_IS(st, metric::kPcCpuMs, 8);
+        F32_IS(st, metric::kPcCpuMaxMs, 21.7);
+        F32_IS(st, metric::kPcGpuPct, 56);
+        F32_IS(st, metric::kPcGpuTempC, 61);
+        F32_IS(st, metric::kPcVramUsedMib, 4096);
+        F32_IS(st, metric::kPcVramTotalMib, 16384);
+        F32_IS(st, metric::kPcCpuPct, 12.3);
+        F32_IS(st, metric::kPcLinkMbps, 350);
+        F32_IS(st, metric::kPcPingMs, 3.2);
+        const MetricValue* v = st.get(metric::kPcFps);
+        CHECK(v != nullptr && v->sampledAt == 5.0);
+    }
+    // The helper's first answer (not attached yet), the headset idle (0 fps, no times), no NVIDIA GPU, no ping yet
+    {
+        MetricStore st;
+        SensorSample s;
+        s.streamState = static_cast<uint32_t>(StreamState::Helper);
+        storeRenderSize(st, s, false, 5.0);
+        ENUM_IS(st, metric::kStreamState, 3u);
+        NA_IS(st, metric::kPcFps, Reason::NoFrames);
+        NA_IS(st, metric::kPcGpuMs, Reason::NoFrames);
+        NA_IS(st, metric::kPcGpuPct, Reason::SensorMissing);
+        NA_IS(st, metric::kPcPingMs, Reason::ReadFailed);
+        SensorSample idle = full;
+        idle.pcFps = 0;
+        idle.pcMissedPct = idle.pcGpuMs = idle.pcGpuMaxMs = idle.pcCpuMs = idle.pcCpuMaxMs = kNoValue;
+        idle.pcGpuTempC = kNoValue;
+        storeRenderSize(st, idle, false, 6.0);
+        NA_IS(st, metric::kPcFps, Reason::NoFrames);
+        NA_IS(st, metric::kPcGpuTempC, Reason::SensorMissing);
+        F32_IS(st, metric::kPcGpuPct, 56);
+        // ...while a game really slow (frame times known) keeps its number
+        SensorSample slow = full;
+        slow.pcFps = 0;
+        storeRenderSize(st, slow, false, 7.0);
+        F32_IS(st, metric::kPcFps, 0);
+        // The stream ends: back to nothing
+        storeRenderSize(st, SensorSample(), false, 8.0);
+        ENUM_IS(st, metric::kStreamState, 0u);
+        NA_IS(st, metric::kPcFps, Reason::NotConnected);
+    }
+}
+
 int main() {
+    testStoreRenderSize();
     testUnplugged();
     testPlugged();
     testThrottle();

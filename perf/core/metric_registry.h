@@ -128,6 +128,23 @@ constexpr uint16_t kFrameCount = 109;      ///< frames aggregated since the last
 constexpr uint16_t kFrameRenderWidth = 110;   ///< i32, pixels
 constexpr uint16_t kFrameRenderHeight = 111;  ///< i32, pixels
 constexpr uint16_t kFrameRenderSource = 112;  ///< enum, see RenderSource
+// Read from RenderSize too (2026-11-15): a PC stream, and what the PC helper's /v2/state says about the game's source.
+// kStreamState is valid whenever the source was read; the rest are N/A NotConnected unless it is StreamState::Helper,
+// and then N/A where the helper said null (NoFrames for the frame values, SensorMissing for the PC's own)
+constexpr uint16_t kStreamState = 113;      ///< enum, see StreamState
+constexpr uint16_t kPcFps = 114;            ///< the streamed game's fps on the PC
+constexpr uint16_t kPcMissedPct = 115;      ///< 1 − fps ÷ display Hz, as the helper computes it
+constexpr uint16_t kPcGpuMs = 116;          ///< the game's GPU frame time on the PC (average)
+constexpr uint16_t kPcGpuMaxMs = 117;
+constexpr uint16_t kPcCpuMs = 118;
+constexpr uint16_t kPcCpuMaxMs = 119;
+constexpr uint16_t kPcGpuPct = 120;         ///< the PC's GPU load
+constexpr uint16_t kPcGpuTempC = 121;
+constexpr uint16_t kPcVramUsedMib = 122;
+constexpr uint16_t kPcVramTotalMib = 123;
+constexpr uint16_t kPcCpuPct = 124;         ///< the PC's CPU load, all cores
+constexpr uint16_t kPcLinkMbps = 125;       ///< the stream's estimated bandwidth (vrserver's "Link BW")
+constexpr uint16_t kPcPingMs = 126;         ///< headset to PC and back: the TCP connect time of the helper request, median
 // CPU (widget 2)
 constexpr uint16_t kCpuUsagePct = 200;
 constexpr uint16_t kCpuMaxCorePct = 201;
@@ -206,6 +223,14 @@ constexpr uint16_t kSelfPowerW = 1114;  ///< estimate, shown with "≈": own sha
 
 /** Values of metric::kFrameRenderSource. */
 enum class RenderSource : uint32_t { None = 0, Headset = 1 /**< a standalone game, via the layer */, Pc = 2 /**< a streamed game, via the PC helper */ };
+
+/** Values of metric::kStreamState. */
+enum class StreamState : uint32_t {
+    None = 0,       ///< not streaming
+    NoHelper = 1,   ///< streaming, no PC helper answers
+    OldHelper = 2,  ///< streaming, a helper without /v2/state: the render size only
+    Helper = 3,     ///< streaming, with the helper's values
+};
 
 /** Values of metric::kBatteryStatus. */
 enum class BatteryStatus : uint32_t { Unknown = 0, Charging = 1, Discharging = 2, Full = 3, NotCharging = 4 };

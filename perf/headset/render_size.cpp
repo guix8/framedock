@@ -6,6 +6,7 @@
 #include <curl/curl.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -19,7 +20,7 @@ namespace render_size {
 namespace {
 
 constexpr int kMaxSide = 16384;
-constexpr size_t kMaxBody = 4096;        // the helper's answer is under 100 bytes
+constexpr size_t kMaxBody = 4096;        // the helper's answer: under 100 bytes (/render), about 400 (/v2/state)
 constexpr size_t kLogTail = 256 * 1024;  // vrlink.txt grows over a session; its last SetPeer lines are near the end
 
 bool validSide(double v) {
@@ -74,10 +75,14 @@ size_t collect(char* data, size_t size, size_t count, void* user) {
     return size * count;
 }
 
-/** @return true with the body of a 200 answer */
-bool httpGet(const std::string& url, long timeoutMs, std::string& body) {
+/**
+ * @param connectMs the TCP connect time (each request is a new connection), NaN if libcurl doesn't say
+ * @return the HTTP status with the answer's body, 0 when there was no answer
+ */
+long httpGet(const std::string& url, long timeoutMs, std::string& body, double& connectMs) {
+    connectMs = std::nan("");
     CURL* curl = curl_easy_init();
-    if (curl == nullptr) return false;
+    if (curl == nullptr) return 0;
     body.clear();
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "http");
@@ -90,16 +95,17 @@ bool httpGet(const std::string& url, long timeoutMs, std::string& body) {
     const CURLcode code = curl_easy_perform(curl);
     long status = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+    curl_off_t connectUs = 0;
+    if (curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME_T, &connectUs) == CURLE_OK && connectUs > 0) {
+        connectMs = static_cast<double>(connectUs) / 1000.0;
+    }
     curl_easy_cleanup(curl);
-    return code == CURLE_OK && status == 200;
+    return code == CURLE_OK ? status : 0;
 }
 
-}  // namespace
-
-HelperReply parseHelperReply(const std::string& body, int& width, int& height) {
-    JsonValue root;
-    std::string error;
-    if (!parseJson(body, root, error) || !root.isObject()) return HelperReply::Invalid;
+/** The /render body, already parsed (also /v2/state's "render") */
+HelperReply parseRender(const JsonValue& root, int& width, int& height) {
+    if (!root.isObject()) return HelperReply::Invalid;
     const JsonValue* v = root.get("v");
     const JsonValue* app = root.get("app");
     if (v == nullptr || !v->isNumber() || v->number != 1 || app == nullptr) return HelperReply::Invalid;
@@ -114,6 +120,78 @@ HelperReply parseHelperReply(const std::string& body, int& width, int& height) {
     width = static_cast<int>(w->number);
     height = static_cast<int>(h->number);
     return HelperReply::Game;
+}
+
+/** @return the member as a number within [min, max], else NaN (null, missing, another type, out of range) */
+double numberIn(const JsonValue& root, const char* key, double min, double max) {
+    const JsonValue* v = root.get(key);
+    if (v == nullptr || !v->isNumber() || !(v->number >= min && v->number <= max)) return std::nan("");
+    return v->number;
+}
+
+}  // namespace
+
+HelperReply parseHelperReply(const std::string& body, int& width, int& height) {
+    JsonValue root;
+    std::string error;
+    if (!parseJson(body, root, error)) return HelperReply::Invalid;
+    return parseRender(root, width, height);
+}
+
+HelperReply parseHelperState(const std::string& body, int& width, int& height, PcState& pc) {
+    JsonValue root;
+    std::string error;
+    if (!parseJson(body, root, error) || !root.isObject()) return HelperReply::Invalid;
+    const JsonValue* v = root.get("v");
+    const JsonValue* render = root.get("render");
+    if (v == nullptr || !v->isNumber() || v->number != 2 || render == nullptr) return HelperReply::Invalid;
+    const HelperReply reply = parseRender(*render, width, height);
+    if (reply == HelperReply::Invalid) return reply;
+    pc = PcState();
+    const JsonValue* vr = root.get("vr");
+    pc.vr = vr != nullptr && vr->isBool() && vr->boolean;
+    pc.hz = numberIn(root, "hz", 1, 1000);
+    // The frame values: only from a helper attached to SteamVR, and only if read lately (no "ageMs": not known, so no)
+    const double ageMs = numberIn(root, "ageMs", 0, 1e9);
+    if (pc.vr && ageMs <= kMaxFrameAgeMs) {
+        pc.fps = numberIn(root, "fps", 0, 1000);
+        pc.missedPct = numberIn(root, "missedPct", 0, 100);
+        pc.gpuMs = numberIn(root, "gpuMs", 0, 10000);
+        pc.gpuMaxMs = numberIn(root, "gpuMaxMs", 0, 10000);
+        pc.cpuMs = numberIn(root, "cpuMs", 0, 10000);
+        pc.cpuMaxMs = numberIn(root, "cpuMaxMs", 0, 10000);
+    }
+    pc.cpuPct = numberIn(root, "pcCpuPct", 0, 100);
+    pc.gpuPct = numberIn(root, "pcGpuPct", 0, 100);
+    pc.gpuTempC = numberIn(root, "pcGpuTempC", -50, 200);
+    pc.vramUsedMb = numberIn(root, "pcVramUsedMb", 0, 1e7);
+    pc.vramTotalMb = numberIn(root, "pcVramTotalMb", 1, 1e7);
+    pc.linkMbit = numberIn(root, "linkMbit", 0, 1e5);
+    return reply;
+}
+
+bool HelperVersion::stateAnswered(const std::string& peer, long status, double now) {
+    if (status == 404) {
+        oldPeer_ = peer;
+        probeAt_ = now + kStateProbeSec;
+        return true;
+    }
+    if (status == 200 && peer == oldPeer_) oldPeer_.clear();  // updated since
+    return false;
+}
+
+void PingMedian::add(double ms) {
+    if (std::isnan(ms)) return;
+    if (samples_.size() >= kSamples) samples_.erase(samples_.begin());
+    samples_.push_back(ms);
+}
+
+double PingMedian::median() const {
+    if (samples_.empty()) return std::nan("");
+    std::vector<double> sorted = samples_;
+    std::sort(sorted.begin(), sorted.end());
+    const size_t mid = sorted.size() / 2;
+    return sorted.size() % 2 != 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2.0;
 }
 
 std::vector<std::string> vrlinkPeers(const std::string& logText) {
@@ -172,10 +250,11 @@ bool layerSizeIsCurrent(int64_t writtenUnix, double startUnix) {
     return !std::isnan(startUnix) && static_cast<double>(writtenUnix) >= startUnix - kStartSlackS;
 }
 
-RenderSizeReader::RenderSizeReader(std::string home, std::string runtimeDir, std::string procRoot)
+RenderSizeReader::RenderSizeReader(std::string home, std::string runtimeDir, std::string procRoot, int port)
     : vrlinkLog_(home + "/.local/share/Steam/logs/vrlink.txt"),
       layerFile_(runtimeDir + "/framecolor/render-size"),
       procRoot_(procRoot),
+      port_(port),
       streaming_(procRoot) {
     // libcurl's global setup, on the constructing (main) thread like Frame Sync's initHttp; it counts its callers
     static std::once_flag once;
@@ -183,35 +262,89 @@ RenderSizeReader::RenderSizeReader(std::string home, std::string runtimeDir, std
 }
 
 Reading RenderSizeReader::read(double now, int scenePid) {
-    if (streaming_.streaming(now)) return readPc(now);
+    // The cards change with this, so one odd look (vrlink restarting) doesn't flip them: the same answer twice
+    const bool seen = streaming_.streaming(now);
+    if (seen == lastSeen_) stable_ = seen;
+    lastSeen_ = seen;
+    if (stable_) return readPc(now);
+    // Standalone: the next stream starts with nothing of the last one's (the address stays as a first guess)
+    ping_.clear();
+    haveGood_ = false;
     return readLayer(scenePid);
+}
+
+bool RenderSizeReader::askPeer(const std::string& peer, double now, Reading& r) {
+    using frame_perf_overlay::StreamState;
+    const std::string base = "http://" + peer + ":" + std::to_string(port_);
+    std::string body;
+    double connectMs = std::nan("");
+    int w = 0, h = 0;
+    HelperReply reply = HelperReply::Invalid;
+    StreamState stream = StreamState::OldHelper;
+    PcState pc;
+    bool old = !version_.askState(peer, now);
+    if (!old) {
+        const long status = httpGet(base + "/v2/state", kTimeoutMs, body, connectMs);
+        old = version_.stateAnswered(peer, status, now);
+        if (!old) {
+            if (status != 200) return false;
+            reply = parseHelperState(body, w, h, pc);
+            stream = StreamState::Helper;
+            // 200 with something this build can't read (a later helper's format): the render size at least
+            if (reply == HelperReply::Invalid) {
+                old = true;
+                stream = StreamState::OldHelper;
+                pc = PcState();
+            }
+        }
+    }
+    if (old) {
+        if (httpGet(base + "/render", kTimeoutMs, body, connectMs) != 200) return false;
+        reply = parseHelperReply(body, w, h);
+    }
+    if (reply == HelperReply::Invalid) return false;
+    if (peer != peer_) ping_.clear();  // another PC's
+    peer_ = peer;
+    ping_.add(connectMs);
+    r.stream = static_cast<uint32_t>(stream);
+    r.pc = pc;
+    r.pingMs = ping_.median();
+    if (reply == HelperReply::Game) {
+        r.width = w;
+        r.height = h;
+        r.source = static_cast<uint32_t>(frame_perf_overlay::RenderSource::Pc);
+    }
+    return true;
 }
 
 Reading RenderSizeReader::readPc(double now) {
     Reading r;
+    r.stream = static_cast<uint32_t>(frame_perf_overlay::StreamState::NoHelper);
     if (now < nextPcTry_) return r;
-    const auto ask = [&](const std::string& peer) {
-        std::string body;
-        if (!httpGet("http://" + peer + ":" + std::to_string(kHelperPort) + "/render", kTimeoutMs, body)) return false;
-        int w = 0, h = 0;
-        const HelperReply reply = parseHelperReply(body, w, h);
-        if (reply == HelperReply::Invalid) return false;
-        peer_ = peer;
-        if (reply == HelperReply::Game) {
-            r.width = w;
-            r.height = h;
-            r.source = static_cast<uint32_t>(frame_perf_overlay::RenderSource::Pc);
+    if (!peer_.empty()) {
+        if (askPeer(peer_, now, r)) {
+            good_ = r;
+            goodAt_ = now;
+            haveGood_ = true;
+            return r;
         }
-        return true;
-    };
-    if (!peer_.empty() && ask(peer_)) return r;
+        // One late answer on a Wi-Fi busy with the stream isn't "no helper": the last values stay for kHoldSec
+        if (haveGood_ && now - goodAt_ <= kHoldSec) return good_;
+    }
+    haveGood_ = false;
     const std::string last = peer_;
     peer_.clear();
+    ping_.clear();
     int tried = 0;
     for (const std::string& peer : vrlinkPeers(readTail(vrlinkLog_, kLogTail))) {
         if (peer == last) continue;
         if (++tried > kMaxPeers) break;
-        if (ask(peer)) return r;
+        if (askPeer(peer, now, r)) {
+            good_ = r;
+            goodAt_ = now;
+            haveGood_ = true;
+            return r;
+        }
     }
     nextPcTry_ = now + kRetrySec;  // no helper there (not installed, or the firewall drops)
     return r;

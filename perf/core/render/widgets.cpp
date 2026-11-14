@@ -944,11 +944,25 @@ double simplePairWidth(const Pen& pen, const std::string& label, const std::stri
     return pen.measure(label + " ", 22) + pen.measure(value, 26, true) + 3 + pen.measure(unit, 20);
 }
 
-/** The app's fps against the display's refresh rate: its level (fps thresholds), Normal when unknown. */
+/** The PC stream's state (2026-11-15); None while standalone or before the RenderSize source was read. */
+StreamState streamState(const WidgetContext& ctx) {
+    return static_cast<StreamState>(i(ctx, kStreamState));
+}
+
+/**
+ * The fps the simple templates show: the app's on the headset, or during a PC stream with the helper's values the
+ * game's on the PC (the headset's is then how fast it shows the video, 90 while the game makes 60).
+ */
+uint16_t simpleFpsId(const WidgetContext& ctx) {
+    return streamState(ctx) == StreamState::Helper && ok(ctx, kPcFps) ? kPcFps : kFrameAppFps;
+}
+
+/** The shown fps against the display's refresh rate: its level (fps thresholds), Normal when unknown. */
 Level fpsLevel(const WidgetContext& ctx) {
     const double hz = f(ctx, kFrameDisplayHz);
-    if (!(hz > 0) || !ok(ctx, kFrameAppFps)) return Level::Normal;
-    return levelOf(f(ctx, kFrameAppFps), hz * ctx.thresholds.fpsWarnRatio, hz * ctx.thresholds.fpsCritRatio, true);
+    const uint16_t fpsId = simpleFpsId(ctx);
+    if (!(hz > 0) || !ok(ctx, fpsId)) return Level::Normal;
+    return levelOf(f(ctx, fpsId), hz * ctx.thresholds.fpsWarnRatio, hz * ctx.thresholds.fpsCritRatio, true);
 }
 
 /**
@@ -958,13 +972,14 @@ Level fpsLevel(const WidgetContext& ctx) {
 double simpleFps(const Pen& pen, double x, double baseline, double dotY, double size, const WidgetContext& ctx) {
     const WidgetText& t = texts(ctx);
     const double hz = f(ctx, kFrameDisplayHz);
-    const bool have = ok(ctx, kFrameAppFps);
+    const uint16_t fpsId = simpleFpsId(ctx);
+    const bool have = ok(ctx, fpsId);
     const Level level = fpsLevel(ctx);
     pen.color(have ? colorOf(level, kAccent) : kTextMuted);
     cairo_arc(pen.cr, x + 6, dotY, 5, 0, 2 * M_PI);
     cairo_fill(pen.cr);
     double tx = x + 18;
-    tx += pen.text(tx, baseline, have ? num(f(ctx, kFrameAppFps), 0) : "--", size, have ? colorOf(level) : kTextMuted, true);
+    tx += pen.text(tx, baseline, have ? num(f(ctx, fpsId), 0) : "--", size, have ? colorOf(level) : kTextMuted, true);
     tx += 6;
     tx += pen.text(tx, baseline, "fps", size * 0.5 + 1, have ? kText : kTextMuted);
     if (have && hz > 0) return tx + 8 + pen.text(tx + 8, baseline, "/ " + num(hz, 0) + "Hz", size * 0.4 + 1.6, kTextMuted);
@@ -1027,6 +1042,49 @@ void staticSimpleA(const Pen& pen, double x, double y, const WidgetText& t) {
     pen.text(x + 14, y + 30, t.frame, 22, kTextMuted);
 }
 
+/**
+ * Simple A's row 2 during a PC stream: "GPU 6.8 ms 56%  CPU 8.0 ms 12%", then a small "PC". What doesn't fit before
+ * right is left out, the least telling first: "PC" (the title row says it too), the CPU %, the GPU %.
+ */
+void simpleAPcRow(const Pen& pen, double x, double baseline, double right, const WidgetContext& ctx) {
+    const Thresholds& th = ctx.thresholds;
+    const WidgetText& t = texts(ctx);
+    const double hz = f(ctx, kFrameDisplayHz);
+    const double targetMs = hz > 0 ? 1000.0 / hz : std::nan("");
+    const auto msLevel = [&](double ms) {
+        return levelOf(ms, targetMs * th.frameWarnRatio, targetMs * th.frameCritRatio);
+    };
+    const double gpuMs = f(ctx, kPcGpuMs);
+    const double cpuMs = f(ctx, kPcCpuMs);
+    const double gpuPct = f(ctx, kPcGpuPct);
+    const double cpuPct = f(ctx, kPcCpuPct);
+    const std::string gpuMsText = num(gpuMs, 1), cpuMsText = num(cpuMs, 1);
+    const std::string gpuPctText = num(gpuPct, 0), cpuPctText = num(cpuPct, 0);
+    constexpr double kGroupGap = 22, kPctGap = 10, kTagGap = 12;
+    const auto pctWidth = [&](const std::string& v) { return kPctGap + pen.measure(v, 22, true) + 2 + pen.measure("%", 18); };
+    const double msWidth = simplePairWidth(pen, "GPU", gpuMsText, "ms") + kGroupGap + simplePairWidth(pen, "CPU", cpuMsText, "ms");
+    const double tagWidth = kTagGap + pen.measure(t.renderPc, 16);
+    bool showGpuPct = ok(ctx, kPcGpuPct), showCpuPct = ok(ctx, kPcCpuPct), showTag = true;
+    const auto width = [&] {
+        return msWidth + (showGpuPct ? pctWidth(gpuPctText) : 0) + (showCpuPct ? pctWidth(cpuPctText) : 0) +
+               (showTag ? tagWidth : 0);
+    };
+    const double room = right - x;
+    if (width() > room) showTag = false;
+    if (width() > room) showCpuPct = false;
+    if (width() > room) showGpuPct = false;
+    const auto pct = [&](double px, const std::string& v, Color c) {
+        px += kPctGap;
+        px += pen.text(px, baseline, v, 22, c, true);
+        return px + 2 + pen.text(px + 2, baseline, "%", 18, kTextMuted);
+    };
+    double nx = simplePair(pen, x, baseline, "GPU", gpuMsText, "ms", colorOf(msLevel(gpuMs)));
+    if (showGpuPct) nx = pct(nx, gpuPctText, colorOf(levelOf(gpuPct, th.gpuWarnPct, th.gpuCritPct), kGpu));
+    nx = simplePair(pen, nx + kGroupGap, baseline, "CPU", cpuMsText, "ms", colorOf(msLevel(cpuMs)));
+    if (showCpuPct) pct(nx, cpuPctText, kText);
+    if (showTag) pen.text(right, baseline, t.renderPc, 16, kTextMuted, false, true);
+}
+
 void drawSimpleA(const Pen& pen, double x, double y, const WidgetContext& ctx) {
     const Thresholds& th = ctx.thresholds;
     const WidgetText& t = texts(ctx);
@@ -1050,26 +1108,38 @@ void drawSimpleA(const Pen& pen, double x, double y, const WidgetContext& ctx) {
     }
     pen.text(clockRight, y + 38, timeOfDayText(text(ctx, kClock), ctx.clockFormat), 20, kTextMuted, false, true);
     // The render size (2026-11-14), like the Frame card's: after the static title, muted, "PC" when the PC helper
-    // said it
+    // said it. During a PC stream "PC" stands there without a size too (no helper, or no game yet)
+    std::string size;
+    bool pcTag = false;
     if (ok(ctx, kFrameRenderWidth) && ok(ctx, kFrameRenderHeight)) {
-        std::string size = std::to_string(i(ctx, kFrameRenderWidth)) + "×" + std::to_string(i(ctx, kFrameRenderHeight));
-        if (i(ctx, kFrameRenderSource) == static_cast<int64_t>(RenderSource::Pc)) size += std::string(" ") + t.renderPc;
-        pen.text(x + 14 + pen.measure(t.frame, 22) + 12, y + 30, size, 16, kTextMuted);
+        size = std::to_string(i(ctx, kFrameRenderWidth)) + "×" + std::to_string(i(ctx, kFrameRenderHeight));
+        pcTag = i(ctx, kFrameRenderSource) == static_cast<int64_t>(RenderSource::Pc);
+        if (pcTag) size += std::string(" ") + t.renderPc;
     }
+    if (streamState(ctx) != StreamState::None && !pcTag) size += (size.empty() ? "" : " ") + std::string(t.renderPc);
+    if (!size.empty()) pen.text(x + 14 + pen.measure(t.frame, 22) + 12, y + 30, size, 16, kTextMuted);
     // Row 2: CPU %, GPU % (in the GPU blue), RAM used / total
     double ry = y + kSimpleARow1H + kSimpleAGap;
+    // During a PC stream with the helper's values, the PC's instead: the game's GPU and CPU frame times (against the
+    // frame budget, like the Frame card's) with the PC's GPU and CPU load. Without them (no helper, an old one, the
+    // headset idle) the headset's row as ever
+    const bool pcRow = streamState(ctx) == StreamState::Helper && ok(ctx, kPcGpuMs) && ok(ctx, kPcCpuMs);
+    if (pcRow) simpleAPcRow(pen, x + 16, ry + 38, right, ctx);
     // CPU: the number is the total (the approved mockup's "CPU 16%"), the colour the busiest core, which is what
     // cpu_warn_pct / cpu_crit_pct are for (the Cpu widget colours its "max core" the same way). A game held back by
     // one busy thread turns it yellow / red while the total stays low; the total alone would hardly ever reach 85 %
     const double cpu = f(ctx, kCpuUsagePct);
     const double busiestCore = f(ctx, kCpuMaxCorePct);
-    double nx = simplePair(pen, x + 16, ry + 38, "CPU", num(cpu, 0), "%",
-                           colorOf(levelOf(busiestCore, th.cpuWarnPct, th.cpuCritPct)));
-    const double gpu = f(ctx, kGpuBusyPct);
-    nx = simplePair(pen, nx + 22, ry + 38, "GPU", num(gpu, 0), "%",
-                    colorOf(levelOf(gpu, th.gpuWarnPct, th.gpuCritPct), std::isnan(gpu) ? kText : kGpu));
-    simplePair(pen, nx + 22, ry + 38, t.simpleRam, num(f(ctx, kRamUsedGib), 1), "/" + num(f(ctx, kRamTotalGib), 1) + "G",
-               kText);
+    double nx = x + 16;
+    if (!pcRow) {
+        nx = simplePair(pen, nx, ry + 38, "CPU", num(cpu, 0), "%",
+                        colorOf(levelOf(busiestCore, th.cpuWarnPct, th.cpuCritPct)));
+        const double gpu = f(ctx, kGpuBusyPct);
+        nx = simplePair(pen, nx + 22, ry + 38, "GPU", num(gpu, 0), "%",
+                        colorOf(levelOf(gpu, th.gpuWarnPct, th.gpuCritPct), std::isnan(gpu) ? kText : kGpu));
+        simplePair(pen, nx + 22, ry + 38, t.simpleRam, num(f(ctx, kRamUsedGib), 1),
+                   "/" + num(f(ctx, kRamTotalGib), 1) + "G", kText);
+    }
     // Row 3: power (W), battery % and its state
     ry += kSimpleARowH + kSimpleAGap;
     const double watts = f(ctx, kPowerVphW);
@@ -1082,7 +1152,23 @@ void drawSimpleB(const Pen& pen, double x, double y, const WidgetContext& ctx) {
     const double right = x + kSimpleBWidth - 16 - 12;
     simpleFps(pen, x + 14, y + 46, y + 32, 44, ctx);
     // The time of day in the top right corner, above "/ 90Hz"
-    pen.text(right, y + 22, timeOfDayText(text(ctx, kClock), ctx.clockFormat), 16, kTextMuted, false, true);
+    const double clockW = pen.text(right, y + 22, timeOfDayText(text(ctx, kClock), ctx.clockFormat), 16, kTextMuted,
+                                   false, true);
+    // During a PC stream the headset's reprojection (frames it had to show again), small, left of the clock: only
+    // where it clears the big number, which reaches up to this line
+    if (streamState(ctx) != StreamState::None && ok(ctx, kFrameReprojectedPct)) {
+        const Thresholds& th = ctx.thresholds;
+        const WidgetText& t = texts(ctx);
+        const uint16_t fpsId = simpleFpsId(ctx);
+        const double left = x + 14 + 18 + pen.measure(ok(ctx, fpsId) ? num(f(ctx, fpsId), 0) : "--", 44, true) + 8;
+        const double reproj = f(ctx, kFrameReprojectedPct);
+        const std::string note = std::string(t.simpleReproj) + " " + num(reproj, 0) + "%";
+        const double noteRight = right - (clockW > 0 ? clockW + 10 : 0);
+        if (noteRight - left >= pen.measure(note, 13)) {
+            pen.text(noteRight, y + 22, note, 13, colorOf(levelOf(reproj, th.reprojWarnPct, th.reprojCritPct), kTextMuted),
+                     false, true);
+        }
+    }
     // Under it the battery, as on Simple A's last row (yellow / red at Perf's battery thresholds)
     simpleBattery(pen, x + 16, y + 84, right, ctx);
 }

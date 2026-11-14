@@ -575,7 +575,10 @@ void testSimpleTemplates() {
     sched.setDemand(looking);
     sched.setEnabledWidgets({W::SimpleA});
     // the time of day (Clock) too, since both templates show it
-    for (const S s : {S::FrameTiming, S::CpuLoad, S::Ram, S::Power, S::Battery, S::Clock}) CHECK(sched.refCount(s) == 1);
+    // ...and the render size / the PC stream's state (RenderSize: a file while standalone)
+    for (const S s : {S::FrameTiming, S::CpuLoad, S::Ram, S::Power, S::Battery, S::Clock, S::RenderSize}) {
+        CHECK(sched.refCount(s) == 1);
+    }
     for (const S s : {S::CpuClock, S::GpuClock, S::Temps, S::BoardTemps, S::Throttle, S::Fan, S::Network,
                       S::Controllers, S::Processes, S::SceneApp, S::Uptime, S::SelfCost}) {
         CHECK(sched.refCount(s) == 0);
@@ -583,7 +586,8 @@ void testSimpleTemplates() {
     sched.setEnabledWidgets({W::SimpleB});
     for (size_t i = 1; i < kSourceCount; ++i) {
         const S s = static_cast<S>(i);
-        CHECK(sched.refCount(s) == (s == S::FrameTiming || s == S::Battery || s == S::Clock ? 1u : 0u));
+        CHECK(sched.refCount(s) ==
+              (s == S::FrameTiming || s == S::Battery || s == S::Clock || s == S::RenderSize ? 1u : 0u));
     }
     // Next to a widget that owns the same source, both count
     sched.setEnabledWidgets({W::SimpleB, W::Frame});

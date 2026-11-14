@@ -247,7 +247,7 @@ if(BUILD_TESTING)
              INCLUDES ${PERF}/headset LIBS frame-perf-core PkgConfig::LIBNL Threads::Threads)
   # The Frame card's render size: the PC helper's JSON, vrlink.txt's peers, the layer's file and its staleness rule
   dock_test(render-size SOURCES ${PERF}/tests/render_size_test.cpp ${PERF}/headset/render_size.cpp
-             INCLUDES ${PERF}/headset LIBS framecolor-ui PkgConfig::CURL)
+             INCLUDES ${PERF}/headset LIBS framecolor-ui PkgConfig::CURL Threads::Threads)
   # The new version notice: the version comparison, GitHub's tag_name, the once-a-day rule, version_check.json
   dock_test(version-notice SOURCES ${PERF}/tests/version_notice_test.cpp ${PERF}/headset/version_notice.cpp
              INCLUDES ${PERF}/headset LIBS frame-perf-core PkgConfig::CURL Threads::Threads)

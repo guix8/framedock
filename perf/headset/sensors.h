@@ -83,6 +83,21 @@ struct SensorSample {
     int renderWidth = 0;
     int renderHeight = 0;
     uint32_t renderSource = 0;  ///< a frame_perf_overlay::RenderSource value
+    // A PC stream (render_size.h, 2026-11-15): its state and the PC helper's /v2/state values
+    uint32_t streamState = 0;  ///< a frame_perf_overlay::StreamState value
+    double pcFps = kNoValue;   ///< the streamed game's fps on the PC
+    double pcMissedPct = kNoValue;
+    double pcGpuMs = kNoValue;
+    double pcGpuMaxMs = kNoValue;
+    double pcCpuMs = kNoValue;
+    double pcCpuMaxMs = kNoValue;
+    double pcGpuPct = kNoValue;
+    double pcGpuTempC = kNoValue;
+    double pcVramUsedMiB = kNoValue;
+    double pcVramTotalMiB = kNoValue;
+    double pcCpuPct = kNoValue;
+    double pcLinkMbps = kNoValue;
+    double pcPingMs = kNoValue;  ///< headset to PC and back (the helper request's TCP connect time, median)
 };
 
 /**

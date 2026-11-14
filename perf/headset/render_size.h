@@ -5,6 +5,10 @@
 //   "GET /render" on port 27463 with {"v":1,"app":"<key>","width":W,"height":H}, or {"v":1,"app":null} while no
 //   streamed game runs. The PC's address is the peer of vrlink.txt's latest "SVLDataLinkTransferUDP::SetPeer <here> ->
 //   <peer>" lines; the one that answered is asked first next time.
+//   2026-11-15: the helper of Frame Dock 0.1.3 on also answers "GET /v2/state": {"v":2,"render":<the /render body>,
+//   "vr":bool,"hz":..,"fps":..,"gpuMs":..,...}, any value null while unknown. That is asked first; an older helper
+//   says 404 there and is then asked "/render" (and "/v2/state" again every kStateProbeSec, in case it was updated).
+//   The request's TCP connect time is the headset-to-PC round trip: the "ping".
 // - Standalone: the layer (third_party/vkbasalt, vrcompositor only) writes "W H <unix seconds>" to
 //   $XDG_RUNTIME_DIR/framecolor/render-size when a game's eye textures are created. Taken only while a scene app runs
 //   and only if written after that app's process started, so a previous game's size isn't shown.
@@ -14,6 +18,8 @@
 
 #include "auto_profile.h"
 
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -66,11 +72,77 @@ double processStartUnix(const std::string& statText, double uptimeS, double nowU
 bool layerSizeIsCurrent(int64_t writtenUnix, double startUnix);
 constexpr double kStartSlackS = 2.0;
 
+/** The helper's /v2/state values about the stream's source. NaN: null, missing, or out of range. */
+struct PcState {
+    bool vr = false;  ///< the helper is attached to SteamVR
+    double hz = std::nan("");
+    double fps = std::nan("");        ///< the game's fps on the PC
+    double missedPct = std::nan("");  ///< 1 - fps / hz, the helper's
+    double gpuMs = std::nan("");
+    double gpuMaxMs = std::nan("");
+    double cpuMs = std::nan("");
+    double cpuMaxMs = std::nan("");
+    double cpuPct = std::nan("");  ///< the PC's CPU load
+    double gpuPct = std::nan("");
+    double gpuTempC = std::nan("");
+    double vramUsedMb = std::nan("");
+    double vramTotalMb = std::nan("");
+    double linkMbit = std::nan("");
+};
+
+/** The frame values (fps ... cpuMaxMs) are dropped when the helper read them longer ago than this ("ageMs"). */
+constexpr double kMaxFrameAgeMs = 3000.0;
+
+/**
+ * Parses the helper's /v2/state body, defensively: version 2 only, "render" by parseHelperReply's rules, every other
+ * value on its own (a wrong type or a value out of range is NaN, not a failure).
+ * @param body the response body
+ * @param width,height set for Game
+ * @param pc set unless Invalid
+ * @return as parseHelperReply, for "render"
+ */
+HelperReply parseHelperState(const std::string& body, int& width, int& height, PcState& pc);
+
+/** Which helper a peer runs: /v2/state is asked unless that peer said 404 to it less than kStateProbeSec ago. */
+class HelperVersion {
+public:
+    static constexpr double kStateProbeSec = 60.0;
+    /** @return whether to ask the peer /v2/state (false: /render straight away, it is an old helper) */
+    bool askState(const std::string& peer, double now) const { return peer != oldPeer_ || now >= probeAt_; }
+    /**
+     * The peer answered /v2/state.
+     * @param status the HTTP status (0 = no answer)
+     * @return true for 404: an old helper, ask it /render
+     */
+    bool stateAnswered(const std::string& peer, long status, double now);
+
+private:
+    std::string oldPeer_;  ///< the peer that said 404 to /v2/state
+    double probeAt_ = 0.0;
+};
+
+/** The last kSamples connect times; their median rides out one slow connect (Wi-Fi power save, a busy PC). */
+class PingMedian {
+public:
+    static constexpr size_t kSamples = 5;
+    /** @param ms NaN is skipped */
+    void add(double ms);
+    void clear() { samples_.clear(); }
+    /** @return NaN while empty */
+    double median() const;
+
+private:
+    std::vector<double> samples_;  ///< oldest first
+};
+
 /** One reading; source is a frame_perf_overlay::RenderSource value (0 = nothing known). */
 struct Reading {
     int width = 0;
     int height = 0;
     uint32_t source = 0;
+    uint32_t stream = 0;           ///< a frame_perf_overlay::StreamState value
+    PcState pc;                    ///< for StreamState::Helper
+    double pingMs = std::nan("");  ///< while a helper answers (old or new)
 };
 
 /** Reads the render size (AsyncSampler's thread, one at a time). */
@@ -80,14 +152,17 @@ public:
     static constexpr double kRetrySec = 15.0;
     static constexpr long kTimeoutMs = 400;
     static constexpr int kMaxPeers = 3;  ///< addresses tried per read
+    /** A helper that answered keeps its last values this long while requests fail (then kRetrySec applies). */
+    static constexpr double kHoldSec = 3.0;
 
     /**
      * Sets up libcurl: construct on the main thread.
      * @param home $HOME (vrlink.txt is under it)
      * @param runtimeDir $XDG_RUNTIME_DIR (the layer's file)
      * @param procRoot /proc
+     * @param port the helper's port (tests: a fake helper's)
      */
-    RenderSizeReader(std::string home, std::string runtimeDir, std::string procRoot = "/proc");
+    RenderSizeReader(std::string home, std::string runtimeDir, std::string procRoot = "/proc", int port = kHelperPort);
 
     /**
      * @param now monotonic seconds
@@ -99,11 +174,21 @@ private:
     std::string vrlinkLog_;
     std::string layerFile_;
     std::string procRoot_;
+    int port_;
     framecolor::StreamingProbe streaming_;
     std::string peer_;           ///< the PC that answered last
     double nextPcTry_ = -1e300;  ///< after a PC that didn't answer
+    HelperVersion version_;
+    PingMedian ping_;
+    bool lastSeen_ = false;  ///< StreamingProbe's last answer
+    bool stable_ = false;    ///< ... once it said the same twice: what read() goes by
+    Reading good_;           ///< the helper's last answer, shown for kHoldSec while it doesn't answer
+    double goodAt_ = 0;
+    bool haveGood_ = false;
 
     Reading readPc(double now);
+    /** Asks one address. @return false when no helper answered there (r untouched) */
+    bool askPeer(const std::string& peer, double now, Reading& r);
     Reading readLayer(int scenePid) const;
 };
 

@@ -68,6 +68,44 @@ void storeWifi(frame_perf_overlay::MetricStore& st, const WifiInfo& w, bool resu
 
 }  // namespace
 
+void storeRenderSize(frame_perf_overlay::MetricStore& st, const SensorSample& s, bool noVr, double now) {
+    using frame_perf_overlay::StreamState;
+    if (s.renderSource == 0) {
+        // Nothing known: no game, a previous game's size, no PC helper. Without OpenVR (and no stream): NoSteamVr
+        const Reason why = noVr ? Reason::NoSteamVr : Reason::NotConnected;
+        for (uint16_t id : {metric::kFrameRenderWidth, metric::kFrameRenderHeight, metric::kFrameRenderSource}) {
+            st.setNa(id, why, now);
+        }
+    } else {
+        st.setI32(metric::kFrameRenderWidth, s.renderWidth, now);
+        st.setI32(metric::kFrameRenderHeight, s.renderHeight, now);
+        st.setEnum(metric::kFrameRenderSource, s.renderSource, now);
+    }
+    st.setEnum(metric::kStreamState, s.streamState, now);
+    // The ping is known with an old helper too; the rest only with /v2/state
+    const bool helper = s.streamState == static_cast<uint32_t>(StreamState::Helper);
+    const bool answered = helper || s.streamState == static_cast<uint32_t>(StreamState::OldHelper);
+    st.setF32(metric::kPcPingMs, answered ? s.pcPingMs : kNoValue, now,
+              answered ? Reason::ReadFailed : Reason::NotConnected);
+    // No new frame on the PC (the headset idle: the helper says 0 fps and no frame times) isn't a game at 0 fps
+    const bool noFrames = s.pcFps == 0 && std::isnan(s.pcGpuMs);
+    const Reason frames = helper ? Reason::NoFrames : Reason::NotConnected;
+    st.setF32(metric::kPcFps, helper && !noFrames ? s.pcFps : kNoValue, now, frames);
+    st.setF32(metric::kPcMissedPct, helper ? s.pcMissedPct : kNoValue, now, frames);
+    st.setF32(metric::kPcGpuMs, helper ? s.pcGpuMs : kNoValue, now, frames);
+    st.setF32(metric::kPcGpuMaxMs, helper ? s.pcGpuMaxMs : kNoValue, now, frames);
+    st.setF32(metric::kPcCpuMs, helper ? s.pcCpuMs : kNoValue, now, frames);
+    st.setF32(metric::kPcCpuMaxMs, helper ? s.pcCpuMaxMs : kNoValue, now, frames);
+    // The PC's own: null where it can't be read there (no NVIDIA GPU: no temperature; no "Link BW" line yet)
+    const Reason pc = helper ? Reason::SensorMissing : Reason::NotConnected;
+    st.setF32(metric::kPcGpuPct, helper ? s.pcGpuPct : kNoValue, now, pc);
+    st.setF32(metric::kPcGpuTempC, helper ? s.pcGpuTempC : kNoValue, now, pc);
+    st.setF32(metric::kPcVramUsedMib, helper ? s.pcVramUsedMiB : kNoValue, now, pc);
+    st.setF32(metric::kPcVramTotalMib, helper ? s.pcVramTotalMiB : kNoValue, now, pc);
+    st.setF32(metric::kPcCpuPct, helper ? s.pcCpuPct : kNoValue, now, pc);
+    st.setF32(metric::kPcLinkMbps, helper ? s.pcLinkMbps : kNoValue, now, pc);
+}
+
 void registerSystemSources(frame_perf_overlay::Scheduler& scheduler, Sensors& sensors,
                            frame_perf_overlay::MetricStore& store, AsyncSampler* sampler) {
     frame_perf_overlay::MetricStore& st = store;

@@ -71,8 +71,24 @@ void SensorBridge::registerRenderSize(frame_perf_overlay::Scheduler& scheduler, 
         s.renderWidth = r.width;
         s.renderHeight = r.height;
         s.renderSource = r.source;
+        s.streamState = r.stream;
+        s.pcFps = r.pc.fps;
+        s.pcMissedPct = r.pc.missedPct;
+        s.pcGpuMs = r.pc.gpuMs;
+        s.pcGpuMaxMs = r.pc.gpuMaxMs;
+        s.pcCpuMs = r.pc.cpuMs;
+        s.pcCpuMaxMs = r.pc.cpuMaxMs;
+        s.pcGpuPct = r.pc.gpuPct;
+        s.pcGpuTempC = r.pc.gpuTempC;
+        s.pcVramUsedMiB = r.pc.vramUsedMb;
+        s.pcVramTotalMiB = r.pc.vramTotalMb;
+        s.pcCpuPct = r.pc.cpuPct;
+        s.pcLinkMbps = r.pc.linkMbit;
+        s.pcPingMs = r.pingMs;
     };
-    AsyncSampler::Apply apply = [this](const SensorSample& s, double now) { storeRenderSize(s, now); };
+    AsyncSampler::Apply apply = [this](const SensorSample& s, double now) {
+        storeRenderSize(store_, s, renderNoVr_, now);
+    };
     const auto updateScene = [this] {
         SceneApp app;
         const bool haveVr = vr_ != nullptr && vr_->readSceneApp(app);
@@ -93,20 +109,6 @@ void SensorBridge::registerRenderSize(frame_perf_overlay::Scheduler& scheduler, 
         updateScene();
         sampler->request(key);
     });
-}
-
-void SensorBridge::storeRenderSize(const SensorSample& s, double now) {
-    if (s.renderSource == 0) {
-        // Nothing known: no game, a previous game's size, no PC helper. Without OpenVR (and no stream): NoSteamVr
-        const Reason why = renderNoVr_ ? Reason::NoSteamVr : Reason::NotConnected;
-        for (uint16_t id : {metric::kFrameRenderWidth, metric::kFrameRenderHeight, metric::kFrameRenderSource}) {
-            store_.setNa(id, why, now);
-        }
-        return;
-    }
-    store_.setI32(metric::kFrameRenderWidth, s.renderWidth, now);
-    store_.setI32(metric::kFrameRenderHeight, s.renderHeight, now);
-    store_.setEnum(metric::kFrameRenderSource, s.renderSource, now);
 }
 
 void SensorBridge::setProcessOptions(const frame_perf_overlay::Layout& layout) {

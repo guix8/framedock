@@ -821,6 +821,212 @@ void testSimpleTemplates() {
     CHECK(!renderer.render(ctx));
 }
 
+/** Renders a layout in a language; writes pngName for a look by eye. */
+Pixels renderIn(const Layout& layout, const MetricStore& store, WidgetLanguage language, const std::string& pngName,
+                int clockFormat = 24) {
+    GridRenderer renderer(fonts());
+    renderer.setLayout(layout);
+    WidgetContext ctx;
+    ctx.store = &store;
+    ctx.now = kNow;
+    ctx.language = language;
+    ctx.clockFormat = clockFormat;
+    renderer.render(ctx);
+    if (!pngName.empty()) renderer.writePng(pngDir() + "/" + pngName);
+    return renderer.toRgba();
+}
+
+/** Whether two renders agree inside a rectangle (panel pixels). */
+bool sameIn(const Pixels& a, const Pixels& b, int width, int x0, int y0, int x1, int y1) {
+    if (a.size() != b.size()) return false;
+    for (int y = y0; y < y1; ++y) {
+        for (int x = x0; x < x1; ++x) {
+            if (rgbOf(a, width, x, y) != rgbOf(b, width, x, y)) return false;
+        }
+    }
+    return true;
+}
+
+int countIn(const Pixels& px, int width, int x0, int y0, int x1, int y1, unsigned rgb) {
+    int n = 0;
+    for (int y = y0; y < y1; ++y) {
+        for (int x = x0; x < x1; ++x) n += rgbOf(px, width, x, y) == rgb;
+    }
+    return n;
+}
+
+/**
+ * simpleStore(false) during a PC stream: the headset shows the video at 90 fps and had to show 3 % of the frames
+ * again, while the game makes 60 fps on the PC. state 3 carries the helper's values, the others have none.
+ */
+MetricStore streamStore(StreamState state, double t = 1.0) {
+    MetricStore st = simpleStore(false, t);
+    st.setF32(metric::kFrameReprojectedPct, 3, t);
+    st.setEnum(metric::kStreamState, static_cast<uint32_t>(state), t);
+    const bool helper = state == StreamState::Helper;
+    if (helper || state == StreamState::OldHelper) {
+        st.setI32(metric::kFrameRenderWidth, 3048, t);
+        st.setI32(metric::kFrameRenderHeight, 3048, t);
+        st.setEnum(metric::kFrameRenderSource, static_cast<uint32_t>(RenderSource::Pc), t);
+    } else {
+        for (uint16_t id : {metric::kFrameRenderWidth, metric::kFrameRenderHeight, metric::kFrameRenderSource}) {
+            st.setNa(id, Reason::NotConnected, t);
+        }
+    }
+    const double none = std::nan("");
+    const Reason why = Reason::NotConnected;
+    st.setF32(metric::kPcFps, helper ? 60 : none, t, why);
+    st.setF32(metric::kPcMissedPct, helper ? 33.3 : none, t, why);
+    st.setF32(metric::kPcGpuMs, helper ? 6.8 : none, t, why);
+    st.setF32(metric::kPcGpuMaxMs, helper ? 9.1 : none, t, why);
+    st.setF32(metric::kPcCpuMs, helper ? 8.0 : none, t, why);
+    st.setF32(metric::kPcCpuMaxMs, helper ? 21.7 : none, t, why);
+    st.setF32(metric::kPcGpuPct, helper ? 56 : none, t, why);
+    st.setF32(metric::kPcGpuTempC, helper ? 61 : none, t, why);
+    st.setF32(metric::kPcVramUsedMib, helper ? 4096 : none, t, why);
+    st.setF32(metric::kPcVramTotalMib, helper ? 16384 : none, t, why);
+    st.setF32(metric::kPcCpuPct, helper ? 12 : none, t, why);
+    st.setF32(metric::kPcLinkMbps, helper ? 350 : none, t, why);
+    st.setF32(metric::kPcPingMs, helper || state == StreamState::OldHelper ? 3.2 : none, t, why);
+    return st;
+}
+
+// Simple A / B during a PC stream (2026-11-15). Panel pixels: the card starts at (8, 8); Simple A's rows are
+// y 8-112 (frame), 120-176 (CPU / GPU / RAM, or the PC's), 184-240 (power, battery)
+void testSimpleStream() {
+    const Layout a = oneWidget(inst(W::SimpleA));
+    const Layout b = oneWidget(inst(W::SimpleB));
+    const int wa = 512, wb = 250;
+    const struct {
+        WidgetLanguage language;
+        const char* tag;
+    } kLanguages[] = {{WidgetLanguage::Ko, "ko"}, {WidgetLanguage::En, "en"}, {WidgetLanguage::Ja, "ja"}};
+    for (const auto& l : kLanguages) {
+        const std::string tag = std::string("_") + l.tag + ".png";
+        // Standalone: the stream's state read as "not streaming" draws exactly what it drew before there was one
+        const Pixels aBefore = renderIn(a, simpleStore(false), l.language, "");
+        const Pixels bBefore = renderIn(b, simpleStore(false), l.language, "");
+        MetricStore standalone = streamStore(StreamState::None);
+        standalone.setF32(metric::kFrameReprojectedPct, 0, 1.0);  // simpleStore(false)'s
+        const Pixels aNone = renderIn(a, standalone, l.language, "simple_a_standalone" + tag);
+        const Pixels bNone = renderIn(b, standalone, l.language, "simple_b_standalone" + tag);
+        CHECK(aNone == aBefore && bNone == bBefore);
+        // ...also with reprojection: Simple B shows none while standalone
+        MetricStore standalone3 = streamStore(StreamState::None);
+        CHECK(renderIn(b, standalone3, l.language, "") == bBefore);
+        const Pixels aNone3 = renderIn(a, standalone3, l.language, "");
+
+        // Streaming without a helper: a "PC" after the title, everything else the headset's
+        const Pixels aNoHelper = renderIn(a, streamStore(StreamState::NoHelper), l.language, "simple_a_stream_nohelper" + tag);
+        CHECK(aNoHelper != aNone3);
+        CHECK(sameIn(aNoHelper, aNone3, wa, 0, 8 + 44, wa, 248));     // the fps line and rows 2, 3
+        CHECK(!sameIn(aNoHelper, aNone3, wa, 8, 8 + 10, 300, 8 + 40));  // the title line: "PC"
+        // Simple B: the headset's reprojection, small, clear of the clock, "/ 90Hz" and the battery row
+        const Pixels bNoHelper = renderIn(b, streamStore(StreamState::NoHelper), l.language, "simple_b_stream_nohelper" + tag);
+        CHECK(bNoHelper != bNone);
+        CHECK(sameIn(bNoHelper, bNone, wb, 0, 8 + 26, wb, 116));           // from the fps unit's line down
+        CHECK(sameIn(bNoHelper, bNone, wb, 8 + 222 - 46, 0, wb, 8 + 26));  // the clock ("21:19", 16 px)
+        CHECK(sameIn(bNoHelper, bNone, wb, 0, 0, 8 + 80, 116));            // the dot and the big number
+
+        // An old helper: as without one, and the render size's own "PC" isn't said twice
+        MetricStore sizeOnly = streamStore(StreamState::None);
+        sizeOnly.setI32(metric::kFrameRenderWidth, 3048, 1.0);
+        sizeOnly.setI32(metric::kFrameRenderHeight, 3048, 1.0);
+        sizeOnly.setEnum(metric::kFrameRenderSource, static_cast<uint32_t>(RenderSource::Pc), 1.0);
+        CHECK(renderIn(a, streamStore(StreamState::OldHelper), l.language, "simple_a_stream_oldhelper" + tag) ==
+              renderIn(a, sizeOnly, l.language, ""));
+        CHECK(renderIn(b, streamStore(StreamState::OldHelper), l.language, "") == bNoHelper);
+
+        // With the helper's values: the game's 60 fps on the PC (coloured against 90 Hz like a standalone 60), the
+        // PC's row 2; the headset's reprojection, pill, clock and row 3 stay
+        const Pixels aPc = renderIn(a, streamStore(StreamState::Helper), l.language, "simple_a_stream_pc" + tag);
+        MetricStore sixty = sizeOnly;
+        sixty.setF32(metric::kFrameAppFps, 60, 1.0);
+        const Pixels aSixty = renderIn(a, sixty, l.language, "");
+        CHECK(sameIn(aPc, aSixty, wa, 0, 0, wa, 8 + 104));            // row 1 whole: the fps and its colour
+        CHECK(!sameIn(aPc, aNoHelper, wa, 8, 8 + 44, 200, 8 + 100));  // not the headset's 90
+        CHECK(!sameIn(aPc, aSixty, wa, 8, 120, wa - 8, 176));         // row 2: the PC's
+        CHECK(sameIn(aPc, aSixty, wa, 0, 180, wa, 248));              // row 3
+        CHECK(countIn(aPc, wa, 8, 120, wa - 8, 176, 0xf85149) == 0 && countIn(aPc, wa, 8, 120, wa - 8, 176, 0xd29922) == 0);
+        const Pixels bPc = renderIn(b, streamStore(StreamState::Helper), l.language, "simple_b_stream_pc" + tag);
+        MetricStore bSixty = streamStore(StreamState::NoHelper);
+        bSixty.setF32(metric::kFrameAppFps, 60, 1.0);
+        CHECK(bPc == renderIn(b, bSixty, l.language, ""));
+        CHECK(bPc != bNoHelper);
+    }
+
+    // Row 2's GPU time against the frame budget (11.1 ms at 90 Hz): yellow from 90 % of it, red over it (Perf's
+    // frame thresholds, as on the Frame card)
+    const auto row2 = [&](double gpuMs, double cpuMs, unsigned rgb, const char* png = "") {
+        MetricStore st = streamStore(StreamState::Helper);
+        st.setF32(metric::kPcGpuMs, gpuMs, 1.0);
+        st.setF32(metric::kPcCpuMs, cpuMs, 1.0);
+        return countIn(renderIn(a, st, WidgetLanguage::Ko, png), wa, 8, 120, wa - 8, 176, rgb);
+    };
+    CHECK(row2(10.5, 8.0, 0xd29922, "simple_a_stream_pc_gpu_warn.png") > 20 && row2(10.5, 8.0, 0xf85149) == 0);
+    CHECK(row2(12.4, 8.0, 0xf85149, "simple_a_stream_pc_gpu_over.png") > 20);
+    CHECK(row2(6.8, 21.7, 0xf85149, "simple_a_stream_pc_cpu_over.png") > 20);  // the CPU's time the same way
+    CHECK(row2(6.8, 8.0, 0xf85149) == 0 && row2(6.8, 8.0, 0xd29922) == 0);
+
+    // The helper's values missing (its first answer, the headset idle, a PC without NVML): the headset's fps and row
+    const Pixels aNoHelper = renderIn(a, streamStore(StreamState::NoHelper), WidgetLanguage::Ko, "");
+    MetricStore waiting = streamStore(StreamState::Helper);
+    for (uint16_t id : {metric::kPcFps, metric::kPcMissedPct, metric::kPcGpuMs, metric::kPcGpuMaxMs, metric::kPcCpuMs,
+                        metric::kPcCpuMaxMs}) {
+        waiting.setNa(id, Reason::NoFrames, 1.0);
+    }
+    const Pixels aWaiting = renderIn(a, waiting, WidgetLanguage::Ko, "simple_a_stream_pc_waiting.png");
+    CHECK(sameIn(aWaiting, aNoHelper, wa, 0, 8 + 44, wa, 248));  // all but the title line (the size is known here)
+    MetricStore noLoad = streamStore(StreamState::Helper);
+    noLoad.setNa(metric::kPcGpuPct, Reason::SensorMissing, 1.0);
+    noLoad.setNa(metric::kPcCpuPct, Reason::SensorMissing, 1.0);
+    const Pixels aPc = renderIn(a, streamStore(StreamState::Helper), WidgetLanguage::Ko, "");
+    const Pixels aNoLoad = renderIn(a, noLoad, WidgetLanguage::Ko, "simple_a_stream_pc_no_load.png");
+    CHECK(aNoLoad != aPc && !sameIn(aNoLoad, aNoHelper, wa, 8, 120, wa - 8, 176));  // the times alone, still the PC's
+    // The widest row 2 (three-digit times and loads) stays inside the card
+    MetricStore wide = streamStore(StreamState::Helper);
+    wide.setF32(metric::kPcGpuMs, 123.4, 1.0);
+    wide.setF32(metric::kPcCpuMs, 234.5, 1.0);
+    wide.setF32(metric::kPcGpuPct, 100, 1.0);
+    wide.setF32(metric::kPcCpuPct, 100, 1.0);
+    const Pixels aWide = renderIn(a, wide, WidgetLanguage::Ko, "simple_a_stream_pc_wide.png");
+    CHECK(sameIn(aWide, aPc, wa, 8 + 496 - 12, 120, wa, 176));  // nothing in the card's right padding
+
+    // Simple B, tight: a three-digit fps and a 12-hour clock leave the reprojection no room next to the clock, so
+    // it isn't drawn (rather than over the number or the clock)
+    MetricStore tight = streamStore(StreamState::Helper);
+    tight.setF32(metric::kFrameDisplayHz, 144, 1.0);
+    tight.setF32(metric::kPcFps, 144, 1.0);
+    MetricStore tightStandalone = tight;
+    tightStandalone.setEnum(metric::kStreamState, 0, 1.0);
+    tightStandalone.setF32(metric::kFrameAppFps, 144, 1.0);
+    const Pixels bTight = renderIn(b, tight, WidgetLanguage::Ko, "simple_b_stream_pc_tight.png", 12);
+    const Pixels bTightBefore = renderIn(b, tightStandalone, WidgetLanguage::Ko, "", 12);
+    CHECK(bTight == bTightBefore);
+    // The clock off: the reprojection takes the corner
+    const Pixels bNoClock = renderIn(b, streamStore(StreamState::Helper), WidgetLanguage::Ko, "simple_b_stream_pc_noclock.png", 0);
+    MetricStore noClockStandalone = streamStore(StreamState::None);
+    noClockStandalone.setF32(metric::kFrameAppFps, 60, 1.0);
+    const Pixels bNoClockBefore = renderIn(b, noClockStandalone, WidgetLanguage::Ko, "", 0);
+    CHECK(!sameIn(bNoClock, bNoClockBefore, wb, 8 + 120, 0, wb, 8 + 26));
+    CHECK(sameIn(bNoClock, bNoClockBefore, wb, 0, 8 + 26, wb, 116));
+
+    // The stream's state alone redraws both (a borrowed metric)
+    for (const Layout* layout : {&a, &b}) {
+        GridRenderer r(fonts());
+        r.setLayout(*layout);
+        MetricStore st = streamStore(StreamState::None);
+        WidgetContext c;
+        c.store = &st;
+        c.now = kNow;
+        c.language = WidgetLanguage::Ko;
+        r.render(c);
+        CHECK(!r.render(c));
+        st.setEnum(metric::kStreamState, static_cast<uint32_t>(StreamState::NoHelper), 2.0);
+        CHECK(r.render(c) && r.lastRedrawn() == 1);
+    }
+}
+
 }  // namespace
 
 // The Dock's highlight: an accent border in the panel's margin while a laser points at the HUD. A change repaints
@@ -1289,6 +1495,7 @@ int main() {
     testCompactToggleKeepsGraphHistory();
     testSegmentedPillColours();
     testSimpleTemplates();
+    testSimpleStream();
     testHighlight();
     testControls();
     testFrameRenderSize();

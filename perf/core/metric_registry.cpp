@@ -27,7 +27,7 @@ constexpr uint32_t kUptimeMs = 1000;
 constexpr uint32_t kSelfMs = 2000;
 constexpr uint32_t kSceneAppMs = 5000;  // a safety net: the scene-app event updates it at once
 constexpr uint32_t kProcessMs = 2000;   // one /proc scan costs 5-8 ms on the Frame
-constexpr uint32_t kRenderSizeMs = 2000;  // a file, or one LAN request (on the sampler's thread)
+constexpr uint32_t kRenderSizeMs = 1000;  // a file, or one LAN request (on the sampler's thread)
 
 const std::vector<MetricDef> kRegistry = {
     // Frame
@@ -44,6 +44,21 @@ const std::vector<MetricDef> kRegistry = {
     {metric::kFrameRenderWidth, "frame.render_width", "px", W::Frame, S::RenderSize, kRenderSizeMs, T::I32},
     {metric::kFrameRenderHeight, "frame.render_height", "px", W::Frame, S::RenderSize, kRenderSizeMs, T::I32},
     {metric::kFrameRenderSource, "frame.render_source", "", W::Frame, S::RenderSize, kRenderSizeMs, T::Enum},
+    // A PC stream: its state and the PC helper's /v2/state
+    {metric::kStreamState, "frame.stream_state", "", W::Frame, S::RenderSize, kRenderSizeMs, T::Enum},
+    {metric::kPcFps, "frame.pc_fps", "fps", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    {metric::kPcMissedPct, "frame.pc_missed_pct", "%", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    {metric::kPcGpuMs, "frame.pc_gpu_ms", "ms", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    {metric::kPcGpuMaxMs, "frame.pc_gpu_max_ms", "ms", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    {metric::kPcCpuMs, "frame.pc_cpu_ms", "ms", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    {metric::kPcCpuMaxMs, "frame.pc_cpu_max_ms", "ms", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    {metric::kPcGpuPct, "frame.pc_gpu_pct", "%", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    {metric::kPcGpuTempC, "frame.pc_gpu_temp_c", "°C", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    {metric::kPcVramUsedMib, "frame.pc_vram_used_mib", "MiB", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    {metric::kPcVramTotalMib, "frame.pc_vram_total_mib", "MiB", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    {metric::kPcCpuPct, "frame.pc_cpu_pct", "%", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    {metric::kPcLinkMbps, "frame.pc_link_mbps", "Mbps", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    {metric::kPcPingMs, "frame.pc_ping_ms", "ms", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
     // CPU
     {metric::kCpuUsagePct, "cpu.usage_pct", "%", W::Cpu, S::CpuLoad, kCpuMs, T::F32},
     {metric::kCpuMaxCorePct, "cpu.max_core_pct", "%", W::Cpu, S::CpuLoad, kCpuMs, T::F32},
@@ -143,16 +158,21 @@ const std::vector<uint16_t>& borrowedMetrics(WidgetType type) {
     // Simple A: app fps / display Hz, reprojection, throttle; CPU % (total shown, coloured by the busiest core); GPU
     // load, RAM; power; battery %, its state and the time left; the time of day; the render size. Their sources:
     // FrameTiming, CpuLoad, Ram, Power, Battery, Clock, RenderSize. No CPU / GPU clocks, temperatures, network or
-    // controllers
+    // controllers. During a PC stream (RenderSize too): the game's fps and frame times on the PC, the PC's load
     static const std::vector<uint16_t> kSimpleA = {
         kFrameRenderWidth, kFrameRenderHeight, kFrameRenderSource,
         kFrameAppFps, kFrameDisplayHz, kFrameReprojectedPct, kFrameThrottled, kCpuUsagePct,   kCpuMaxCorePct,
         kGpuBusyPct,  kRamUsedGib,     kRamTotalGib,         kPowerVphW,      kBatteryPct,    kBatteryStatus,
         kBatteryChargerOnline, kBatteryRemainMin, kClock,
+        kStreamState, kPcFps, kPcGpuMs, kPcCpuMs, kPcGpuPct, kPcCpuPct,
     };
-    // Simple B: app fps / display Hz, battery % and its state, the time of day (FrameTiming, Battery and Clock)
+    // Simple B: app fps / display Hz, battery % and its state, the time of day (FrameTiming, Battery and Clock).
+    // During a PC stream the game's fps on the PC and the headset's reprojection. So RenderSize is read too, once a
+    // second: standalone that is the vrlink check (its pid, or a /proc scan every 5 s), the scene app from OpenVR
+    // and, with a game running, the layer's small file and two /proc files
     static const std::vector<uint16_t> kSimpleB = {kFrameAppFps, kFrameDisplayHz, kBatteryPct, kBatteryStatus,
-                                                   kBatteryChargerOnline, kBatteryRemainMin, kClock};
+                                                   kBatteryChargerOnline, kBatteryRemainMin, kClock,
+                                                   kFrameReprojectedPct, kStreamState, kPcFps};
     static const std::vector<uint16_t> kNone;
     switch (type) {
         case WidgetType::SimpleA: return kSimpleA;

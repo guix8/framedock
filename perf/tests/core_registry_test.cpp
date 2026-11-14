@@ -44,6 +44,22 @@ void testCompiledRegistry() {
     CHECK(std::find(a.begin(), a.end(), metric::kCpuMaxCorePct) != a.end());
     CHECK(std::find(a.begin(), a.end(), metric::kCpuUsagePct) != a.end());
     for (const MetricDef& d : registry()) CHECK(d.owner != WidgetType::SimpleA && d.owner != WidgetType::SimpleB);
+    // The PC stream's metrics (2026-11-15): 113-126, Frame's, read with the render size once a second; the state is
+    // an enum, the rest numbers
+    for (uint16_t id = metric::kStreamState; id <= metric::kPcPingMs; ++id) {
+        const MetricDef* d = findMetric(id);
+        CHECK(d != nullptr);
+        if (d == nullptr) continue;
+        CHECK(d->owner == WidgetType::Frame && d->source == SourceId::RenderSize && d->intervalMs == 1000);
+        CHECK(d->type == (id == metric::kStreamState ? WireType::Enum : WireType::F32));
+    }
+    CHECK(metric::kStreamState == 113 && metric::kPcPingMs == 126);
+    CHECK(findMetric(metric::kFrameRenderWidth) != nullptr && findMetric(metric::kFrameRenderWidth)->intervalMs == 1000);
+    // Both simple templates follow the stream's state and show the game's fps on the PC
+    const std::vector<uint16_t>& b = borrowedMetrics(WidgetType::SimpleB);
+    for (const uint16_t id : {metric::kStreamState, metric::kPcFps}) {
+        CHECK(std::find(a.begin(), a.end(), id) != a.end() && std::find(b.begin(), b.end(), id) != b.end());
+    }
     // A borrowed id missing from a table is reported
     const std::vector<MetricDef> tiny = {{metric::kFrameAppFps, "frame.app_fps", "fps", WidgetType::Frame,
                                           SourceId::FrameTiming, 500, WireType::F32}};

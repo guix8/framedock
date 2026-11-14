@@ -20,3 +20,11 @@ class AsyncSampler;
  */
 void registerSystemSources(frame_perf_overlay::Scheduler& scheduler, Sensors& sensors,
                            frame_perf_overlay::MetricStore& store, AsyncSampler* sampler = nullptr);
+
+/**
+ * Stores the RenderSize source's metrics (SensorBridge reads them: render_size.h): the render size, the stream's
+ * state (always valid) and, with a PC helper that answers /v2/state, its values.
+ * @param s the sample's render* / streamState / pc* fields
+ * @param noVr no OpenVR: an unknown render size is N/A NoSteamVr rather than NotConnected
+ */
+void storeRenderSize(frame_perf_overlay::MetricStore& store, const SensorSample& s, bool noVr, double now);
