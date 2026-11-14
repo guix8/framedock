@@ -9,6 +9,9 @@
 //   "vr":bool,"hz":..,"fps":..,"gpuMs":..,...}, any value null while unknown. That is asked first; an older helper
 //   says 404 there and is then asked "/render" (and "/v2/state" again every kStateProbeSec, in case it was updated).
 //   The request's TCP connect time is the headset-to-PC round trip: the "ping".
+//   Its "last" sums up the stream session that ended last on the PC (SteamVR writes that when a stream ends). The
+//   helper is asked only during a stream, so once one has ended it is asked a few more times (AfterStream) for that
+//   session's summary. Otherwise nothing is asked while standalone.
 // - Standalone: the layer (third_party/vkbasalt, vrcompositor only) writes "W H <unix seconds>" to
 //   $XDG_RUNTIME_DIR/framecolor/render-size when a game's eye textures are created. Taken only while a scene app runs
 //   and only if written after that app's process started, so a previous game's size isn't shown.
@@ -72,6 +75,17 @@ double processStartUnix(const std::string& statText, double uptimeS, double nowU
 bool layerSizeIsCurrent(int64_t writtenUnix, double startUnix);
 constexpr double kStartSlackS = 2.0;
 
+/** The helper's "last": a stream session that has ended, as SteamVR on the PC counted its frames. */
+struct LastSession {
+    static constexpr size_t kMaxCauses = 3;
+    int64_t endedUnix = 0;              ///< when, Unix seconds on the PC's clock; 0: none
+    int64_t frames = 0;
+    double linkBadPct = std::nan("");   ///< frames the viewer saw late or not at all, % of all
+    double pcMissedPct = std::nan("");  ///< frames the PC had no new picture to send for, % of all
+    std::vector<std::string> causes;    ///< SteamVR's names for what it blames for the link's bad frames, the most
+                                        ///< frequent first, kMaxCauses at most ("DecodeSlow")
+};
+
 /** The helper's /v2/state values about the stream's source. NaN: null, missing, or out of range. */
 struct PcState {
     bool vr = false;  ///< the helper is attached to SteamVR
@@ -88,6 +102,7 @@ struct PcState {
     double vramUsedMb = std::nan("");
     double vramTotalMb = std::nan("");
     double linkMbit = std::nan("");
+    LastSession last;  ///< the session that ended last (endedUnix 0: none, or not understood)
 };
 
 /** The frame values (fps ... cpuMaxMs) are dropped when the helper read them longer ago than this ("ageMs"). */
@@ -121,6 +136,37 @@ private:
     double probeAt_ = 0.0;
 };
 
+/**
+ * When to ask the helper for the summary of the stream that just ended. During a stream its "last" is the session
+ * before; SteamVR writes the stream's own when it ends. So once the stream is seen to end the helper is asked again,
+ * every kEverySec for kWindowSec at most, until it names a later session than it did when the stream began. (Its own
+ * times are compared with each other: the headset's clock and the PC's needn't agree.) Only after a stream whose
+ * helper answered /v2/state.
+ */
+class AfterStream {
+public:
+    static constexpr double kWindowSec = 90.0;
+    static constexpr double kEverySec = 5.0;
+    /** A stream begins: nothing is known of it. */
+    void started();
+    /** During the stream the helper's "last" ended then (0: it has none). The first such answer counts. */
+    void during(int64_t endedUnix);
+    /** The stream was seen to end. */
+    void ended(double now);
+    /** Standalone: @return whether to ask the helper now (the next time is then kEverySec later) */
+    bool ask(double now);
+    /** @return whether a "last" that ended then is the stream's own session (later than the one before it) */
+    bool isNew(int64_t endedUnix) const { return known_ && endedUnix > before_; }
+    /** The summary is here, or this helper won't give one: nothing more is asked. */
+    void done() { until_ = -1e300; }
+
+private:
+    bool known_ = false;     ///< a helper answered /v2/state during the stream
+    int64_t before_ = 0;     ///< its "last" then: the session before this stream (0: none)
+    double until_ = -1e300;  ///< asking ends then (-1e300: not asking)
+    double nextAt_ = 0.0;
+};
+
 /** The last kSamples connect times; their median rides out one slow connect (Wi-Fi power save, a busy PC). */
 class PingMedian {
 public:
@@ -143,6 +189,7 @@ struct Reading {
     uint32_t stream = 0;           ///< a frame_perf_overlay::StreamState value
     PcState pc;                    ///< for StreamState::Helper
     double pingMs = std::nan("");  ///< while a helper answers (old or new)
+    LastSession last;              ///< while not streaming: the stream that ended last (endedUnix 0: not known)
 };
 
 /** Reads the render size (AsyncSampler's thread, one at a time). */
@@ -185,11 +232,17 @@ private:
     Reading good_;           ///< the helper's last answer, shown for kHoldSec while it doesn't answer
     double goodAt_ = 0;
     bool haveGood_ = false;
+    bool wasStreaming_ = false;  ///< the read before this one was a stream's
+    AfterStream after_;
+    std::string statePeer_;  ///< the PC that answered /v2/state during the stream: asked for its summary afterwards
+    LastSession summary_;    ///< the summary of the stream that ended last; kept until the next stream starts
 
     Reading readPc(double now);
     /** Asks one address. @return false when no helper answered there (r untouched) */
     bool askPeer(const std::string& peer, double now, Reading& r);
     Reading readLayer(int scenePid) const;
+    /** Asks statePeer_ for the ended stream's summary (AfterStream says when). */
+    void askLast();
 };
 
 }  // namespace render_size

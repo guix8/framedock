@@ -840,6 +840,38 @@ void testStoreRenderSize() {
         ENUM_IS(st, metric::kStreamState, 0u);
         NA_IS(st, metric::kPcFps, Reason::NotConnected);
     }
+    // The stream that ended last: nothing until the helper was asked after it, then its numbers and causes
+    {
+        MetricStore st;
+        storeRenderSize(st, SensorSample(), false, 5.0);
+        for (uint16_t id = metric::kPcLastEndedUnix; id < metric::kPcLastCause0 + metric::kPcLastCauseSlots; ++id) {
+            NA_IS(st, id, Reason::NotConnected);
+        }
+        SensorSample s;
+        s.pcLastEndedUnix = 1794680861;
+        s.pcLastFrames = 64605;
+        s.pcLastLinkBadPct = 0.95;
+        s.pcLastPcMissedPct = 7.66;
+        s.pcLastCauses[0] = "DecodeSlow";
+        s.pcLastCauses[1] = "NetworkSlow";
+        storeRenderSize(st, s, false, 6.0);
+        CHECK(st.intOr(metric::kPcLastEndedUnix, 0) == 1794680861 && st.intOr(metric::kPcLastFrames, 0) == 64605);
+        F32_IS(st, metric::kPcLastLinkBadPct, 0.95);
+        F32_IS(st, metric::kPcLastPcMissedPct, 7.66);
+        const MetricValue* first = st.get(metric::kPcLastCause0);
+        const MetricValue* second = st.get(metric::kPcLastCause0 + 1);
+        CHECK(first != nullptr && first->ok && first->text == "DecodeSlow" && first->sampledAt == 6.0);
+        CHECK(second != nullptr && second->ok && second->text == "NetworkSlow");
+        NA_IS(st, metric::kPcLastCause0 + 2, Reason::NotConnected);  // two causes only
+        ENUM_IS(st, metric::kStreamState, 0u);
+        // Causes left in a sample without a session aren't stored; the next stream starts: nothing again
+        SensorSample stale;
+        stale.pcLastCauses[0] = "DecodeSlow";
+        storeRenderSize(st, stale, false, 7.0);
+        for (uint16_t id = metric::kPcLastEndedUnix; id < metric::kPcLastCause0 + metric::kPcLastCauseSlots; ++id) {
+            NA_IS(st, id, Reason::NotConnected);
+        }
+    }
 }
 
 int main() {

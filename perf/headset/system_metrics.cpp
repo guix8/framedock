@@ -104,6 +104,25 @@ void storeRenderSize(frame_perf_overlay::MetricStore& st, const SensorSample& s,
     st.setF32(metric::kPcVramTotalMib, helper ? s.pcVramTotalMiB : kNoValue, now, pc);
     st.setF32(metric::kPcCpuPct, helper ? s.pcCpuPct : kNoValue, now, pc);
     st.setF32(metric::kPcLinkMbps, helper ? s.pcLinkMbps : kNoValue, now, pc);
+    // The stream that ended last: known once the helper was asked after it, until the next stream starts
+    if (s.pcLastEndedUnix > 0) {
+        st.setI32(metric::kPcLastEndedUnix, static_cast<int32_t>(s.pcLastEndedUnix), now);
+        st.setI32(metric::kPcLastFrames, static_cast<int32_t>(s.pcLastFrames), now);
+        st.setF32(metric::kPcLastLinkBadPct, s.pcLastLinkBadPct, now);
+        st.setF32(metric::kPcLastPcMissedPct, s.pcLastPcMissedPct, now);
+    } else {
+        for (uint16_t id : {metric::kPcLastEndedUnix, metric::kPcLastFrames, metric::kPcLastLinkBadPct,
+                            metric::kPcLastPcMissedPct}) {
+            st.setNa(id, Reason::NotConnected, now);
+        }
+    }
+    for (uint16_t k = 0; k < metric::kPcLastCauseSlots; ++k) {
+        if (s.pcLastEndedUnix > 0 && !s.pcLastCauses[k].empty()) {
+            st.setText(metric::kPcLastCause0 + k, s.pcLastCauses[k], now);
+        } else {
+            st.setNa(metric::kPcLastCause0 + k, Reason::NotConnected, now);
+        }
+    }
 }
 
 void registerSystemSources(frame_perf_overlay::Scheduler& scheduler, Sensors& sensors,

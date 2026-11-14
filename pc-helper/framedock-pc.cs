@@ -10,8 +10,9 @@
 // "GET /v2/state" (Frame Dock 0.1.3 on) adds what SteamVR and the PC say about the stream's source, once a second while
 // it is asked: the game's frame rate and its GPU / CPU frame times (steamvr.cs: SteamVR's frame timing, as fpsVR reads
 // it), the PC's CPU and GPU load, and the link bandwidth SteamVR estimates ("Link BW: Est 350.0 Mbit/s" in the log).
-// Values it doesn't have are null. Read-only: no other request, no other data. Only clients on the same private
-// network are answered.
+// Its "last" sums up the stream session that ended last (session.cs: SteamVR's vrlink_pa_*.json, counters only), or
+// is null. Values it doesn't have are null. Read-only: no other request, no other data. Only clients on the same
+// private network are answered.
 //
 //   framedock-pc.exe --install     copy to %LOCALAPPDATA%\FrameDock, start at sign-in (HKCU Run), start now
 //   framedock-pc.exe --uninstall   stop it, remove the sign-in entry and the copy
@@ -204,6 +205,7 @@ namespace FrameDockPc
             public DateTime FrameAt = DateTime.MinValue;
             public DateTime AskedAt = DateTime.MinValue;  // the last /v2/state
             public bool PcSampled;
+            public SessionWatch Sessions;  // Steam's log folder
         }
 
         /// <summary>
@@ -221,9 +223,10 @@ namespace FrameDockPc
                    (b[0] == 169 && b[1] == 254) || (b[0] == 100 && b[1] >= 64 && b[1] <= 127);
         }
 
-        /// <summary>The /v2/state body. frame / pc may be null (not attached, nothing read yet).</summary>
+        /// <summary>The /v2/state body. frame / pc / last may be null (not attached, nothing read yet, no session).</summary>
         public static string State(RenderLog log, bool vr, double displayHz, FrameWindow frame, double ageMs,
-                                   double? cpuPct, double? gpuPct, double? gpuTempC, double? vramUsedMb, double? vramTotalMb)
+                                   double? cpuPct, double? gpuPct, double? gpuTempC, double? vramUsedMb, double? vramTotalMb,
+                                   SessionSummary last)
         {
             var o = new StringBuilder("{\"v\":2,\"render\":");
             o.Append(Answer(log));
@@ -246,21 +249,26 @@ namespace FrameDockPc
             o.Append(",\"pcVramUsedMb\":").Append(Json.Num(vramUsedMb, "0"));
             o.Append(",\"pcVramTotalMb\":").Append(Json.Num(vramTotalMb, "0"));
             o.Append(",\"linkMbit\":").Append(Json.Num(log.LinkMbit > 0 ? log.LinkMbit : (double?)null, "0.0"));
+            o.Append(",\"last\":").Append(SessionSummary.ToJson(last));
             return o.Append('}').ToString();
         }
 
         static string State(RenderLog log, Readings r)
         {
             bool fresh = r.PcSampled && (DateTime.UtcNow - r.FrameAt).TotalSeconds < 5;
+            // The last session, looked for now: the headset goes by which session an answer names (the one before its
+            // stream, then the stream's own once it has ended), so an answer never names an older one than there is
+            try { r.Sessions.Poll(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             return State(log, r.Vr.Attached, r.Vr.DisplayHz, fresh ? r.Frame : null, (DateTime.UtcNow - r.FrameAt).TotalMilliseconds,
                          r.PcSampled ? r.Pc.CpuPct : null, r.PcSampled ? r.Pc.GpuPct : null, r.PcSampled ? r.Pc.GpuTempC : null,
-                         r.PcSampled ? r.Pc.VramUsedMb : null, r.PcSampled ? r.Pc.VramTotalMb : null);
+                         r.PcSampled ? r.Pc.VramUsedMb : null, r.PcSampled ? r.Pc.VramTotalMb : null, r.Sessions.Last);
         }
 
         static void Serve()
         {
             var follower = new Follower(LogPath());
             var readings = new Readings();
+            readings.Sessions = new SessionWatch(Path.GetDirectoryName(LogPath()));
             var listener = new TcpListener(IPAddress.Any, Port);
             try { listener.Start(); }
             catch (SocketException) { return; }  // the port is taken: nothing to serve with, and no error box at sign-in
@@ -490,16 +498,63 @@ namespace FrameDockPc
             if (german.LinkMbit != 212.5) failures++;
             var one = new FrameWindow();
             one.Frames = 90; one.Fps = 45.0; one.GpuMs = 6.789; one.GpuMaxMs = 9.1; one.CpuMs = 8.0; one.CpuMaxMs = 21.7; one.Dropped = 3;
-            string json = State(log, true, 90.0, one, 120, 12.34, 56, 61, 4096, 16384);
+            string json = State(log, true, 90.0, one, 120, 12.34, 56, 61, 4096, 16384, null);
             string want = "{\"v\":2,\"render\":{\"v\":1,\"app\":null},\"vr\":true,\"hz\":90.0,\"fps\":45.0,\"missedPct\":50.0," +
                           "\"gpuMs\":6.79,\"gpuMaxMs\":9.10,\"cpuMs\":8.00,\"cpuMaxMs\":21.70,\"dropped\":3,\"ageMs\":120," +
-                          "\"pcCpuPct\":12.3,\"pcGpuPct\":56,\"pcGpuTempC\":61,\"pcVramUsedMb\":4096,\"pcVramTotalMb\":16384,\"linkMbit\":350.0}";
+                          "\"pcCpuPct\":12.3,\"pcGpuPct\":56,\"pcGpuTempC\":61,\"pcVramUsedMb\":4096,\"pcVramTotalMb\":16384,\"linkMbit\":350.0,\"last\":null}";
             if (json != want) failures++;
-            if (!State(log, true, 90.0, new FrameWindow(), 0, null, null, null, null, null).Contains("\"fps\":0.0,\"missedPct\":null,")) failures++;
-            json = State(new RenderLog(), false, 0, null, 0, null, null, null, null, null);
+            if (!State(log, true, 90.0, new FrameWindow(), 0, null, null, null, null, null, null).Contains("\"fps\":0.0,\"missedPct\":null,")) failures++;
+            json = State(new RenderLog(), false, 0, null, 0, null, null, null, null, null, null);
             if (json != "{\"v\":2,\"render\":{\"v\":1,\"app\":null},\"vr\":false,\"hz\":null,\"fps\":null,\"missedPct\":null,\"gpuMs\":null," +
                         "\"gpuMaxMs\":null,\"cpuMs\":null,\"cpuMaxMs\":null,\"dropped\":null,\"ageMs\":null,\"pcCpuPct\":null,\"pcGpuPct\":null," +
-                        "\"pcGpuTempC\":null,\"pcVramUsedMb\":null,\"pcVramTotalMb\":null,\"linkMbit\":null}") failures++;
+                        "\"pcGpuTempC\":null,\"pcVramUsedMb\":null,\"pcVramTotalMb\":null,\"linkMbit\":null,\"last\":null}") failures++;
+
+            // A stream session's file, written the way SteamVR writes it (version 1, cut down to a few causes). Of 1000
+            // frames the viewer saw 30 + 10 + 4 + 6 late or not at all and the PC had none to send for 77. The causes
+            // are those of the four link outcomes only, summed: DecodeSlow 23, ClientRxLoss 15, NetworkSlow 15 (a tie:
+            // by name), RetransmitRequested 6, AppSlow 5. Not the top-level "causes", which also counts good frames
+            string session =
+                "{\n   \"cause_by_outcome\" : {\n" +
+                "      \"DegateSkipped\" : {\n         \"AppSlow\" : 12,\n         \"DecodeSlow\" : 0\n      },\n" +
+                "      \"DisplayedLate\" : {\n         \"AppSlow\" : 5,\n         \"ClientRxLoss\" : 9,\n         \"DecodeSlow\" : 20,\n" +
+                "         \"Holdoff\" : 0,\n         \"NetworkSlow\" : 8\n      },\n" +
+                "      \"Mispredicted\" : {\n         \"DecodeSlow\" : 20\n      },\n" +
+                "      \"NotDecoded\" : {\n         \"ClientRxLoss\" : 3,\n         \"NetworkSlow\" : 1\n      },\n" +
+                "      \"NotDisplayed\" : {\n         \"ClientRxLoss\" : 2,\n         \"DecodeSlow\" : 3,\n         \"NetworkSlow\" : 6\n      },\n" +
+                "      \"NotEncoded\" : {\n         \"AppSlow\" : 70,\n         \"Holdoff\" : 7\n      },\n" +
+                "      \"NotReceived\" : {\n         \"ClientRxLoss\" : 1,\n         \"RetransmitRequested\" : 6\n      }\n   },\n" +
+                "   \"causes\" : {\n      \"AppSlow\" : 999,\n      \"DecodeSlow\" : 23\n   },\n" +
+                "   \"frames\" : 1000,\n" +
+                "   \"outcomes\" : {\n      \"DegateSkipped\" : 12,\n      \"DisplayedLate\" : 30,\n      \"Mispredicted\" : 31,\n" +
+                "      \"NotDecoded\" : 4,\n      \"NotDisplayed\" : 10,\n      \"NotEncoded\" : 77,\n      \"NotReceived\" : 6\n   },\n" +
+                "   \"version\" : 1\n}\n";
+            SessionSummary sum = SessionSummary.Parse(session, 1794680861);
+            if (sum == null) failures++;
+            else
+            {
+                if (sum.Frames != 1000 || sum.EndedUnix != 1794680861) failures++;
+                if (Math.Abs(sum.LinkBadPct - 5.0) > 1e-9 || Math.Abs(sum.PcMissedPct - 7.7) > 1e-9) failures++;
+                if (string.Join(",", sum.Causes.ToArray()) != "DecodeSlow,ClientRxLoss,NetworkSlow") failures++;
+                // (the culture is still the one that writes 7,70)
+                string lastJson = "{\"endedUnix\":1794680861,\"frames\":1000,\"linkBadPct\":5.00,\"pcMissedPct\":7.70," +
+                                  "\"causes\":[\"DecodeSlow\",\"ClientRxLoss\",\"NetworkSlow\"]}";
+                if (SessionSummary.ToJson(sum) != lastJson) failures++;
+                if (!State(new RenderLog(), false, 0, null, 0, null, null, null, null, null, sum).EndsWith(",\"linkMbit\":null,\"last\":" + lastJson + "}")) failures++;
+            }
+            // Another version, no frames, a file caught half written, not JSON at all: no summary
+            if (SessionSummary.Parse(session.Replace("\"version\" : 1", "\"version\" : 2"), 1) != null) failures++;
+            if (SessionSummary.Parse(session.Replace("\"frames\" : 1000", "\"frames\" : 0"), 1) != null) failures++;
+            if (SessionSummary.Parse(session.Substring(0, session.Length / 2), 1) != null) failures++;
+            if (SessionSummary.Parse("", 1) != null || SessionSummary.Parse("[1]", 1) != null || SessionSummary.Parse("{\"version\":1}", 1) != null) failures++;
+            if (SessionSummary.Parse("{\"version\":\"1\",\"frames\":10,\"outcomes\":{}}", 1) != null) failures++;
+            // A clean session: no causes. Fewer than three; a name that isn't one, a count that isn't a number: left out
+            sum = SessionSummary.Parse("{\"version\":1,\"frames\":90,\"outcomes\":{\"NotEncoded\":9}}", 5);
+            if (sum == null || sum.LinkBadPct != 0 || Math.Abs(sum.PcMissedPct - 10.0) > 1e-9 || sum.Causes.Count != 0) failures++;
+            if (sum != null && SessionSummary.ToJson(sum) != "{\"endedUnix\":5,\"frames\":90,\"linkBadPct\":0.00,\"pcMissedPct\":10.00,\"causes\":[]}") failures++;
+            sum = SessionSummary.Parse("{\"version\":1,\"frames\":100,\"outcomes\":{\"NotReceived\":2,\"DisplayedLate\":\"x\"}," +
+                                       "\"cause_by_outcome\":{\"NotReceived\":{\"PingSpike\":2,\"<b>\\u0041\":9,\"WgpGap\":null,\"HostRxLoss\":-1}," +
+                                       "\"DisplayedLate\":[1,2]}}", 5);
+            if (sum == null || Math.Abs(sum.LinkBadPct - 2.0) > 1e-9 || string.Join(",", sum.Causes.ToArray()) != "PingSpike") failures++;
             return failures;
         }
     }

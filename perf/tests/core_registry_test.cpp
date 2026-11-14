@@ -67,6 +67,18 @@ void testCompiledRegistry() {
     for (uint16_t id = metric::kStreamState; id <= metric::kPcPingMs; ++id) {
         CHECK(std::find(pc.begin(), pc.end(), id) != pc.end());
     }
+    // ...and the summary of the stream that ended last (127-133: Frame's like the rest, read with the render size;
+    // two whole numbers, two percentages, three names)
+    for (uint16_t id = metric::kPcLastEndedUnix; id < metric::kPcLastCause0 + metric::kPcLastCauseSlots; ++id) {
+        const MetricDef* d = findMetric(id);
+        CHECK(d != nullptr && std::find(pc.begin(), pc.end(), id) != pc.end());
+        if (d == nullptr) continue;
+        CHECK(d->owner == WidgetType::Frame && d->source == SourceId::RenderSize && d->intervalMs == 1000);
+        CHECK(d->type == (id >= metric::kPcLastCause0 ? WireType::ShortString
+                          : id >= metric::kPcLastLinkBadPct ? WireType::F32
+                                                            : WireType::I32));
+    }
+    CHECK(metric::kPcLastEndedUnix == 127 && metric::kPcLastCause0 + metric::kPcLastCauseSlots - 1 == 133);
     CHECK(std::find(pc.begin(), pc.end(), metric::kFrameDisplayHz) != pc.end());
     CHECK(std::find(pc.begin(), pc.end(), metric::kFrameReprojectedPct) != pc.end());
     for (const MetricDef& d : registry()) CHECK(d.owner != WidgetType::PcStream);

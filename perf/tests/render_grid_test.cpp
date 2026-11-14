@@ -1059,6 +1059,87 @@ MetricStore liveStreamStore(int i, double t) {
     return st;
 }
 
+// After a stream the PC stream card says how it went (2026-11-15): under "no PC stream is running" the summary's
+// line and what SteamVR blames, one cause a line. Each line is 22 px
+void testPcStreamLast() {
+    const Layout card = oneWidget(inst(W::PcStream));
+    const int w = 512;
+    const auto withLast = [](StreamState state, std::vector<std::string> causes, double linkBad = 0.95, double pcMissed = 7.66) {
+        return [=](int, double t) {
+            MetricStore st = streamStore(state, t);
+            st.setI32(metric::kPcLastEndedUnix, 1794680861, t);
+            st.setI32(metric::kPcLastFrames, 64605, t);
+            st.setF32(metric::kPcLastLinkBadPct, linkBad, t);
+            st.setF32(metric::kPcLastPcMissedPct, pcMissed, t);
+            for (uint16_t k = 0; k < metric::kPcLastCauseSlots; ++k) {
+                if (k < causes.size()) {
+                    st.setText(metric::kPcLastCause0 + k, causes[k], t);
+                } else {
+                    st.setNa(metric::kPcLastCause0 + k, Reason::NotConnected, t);
+                }
+            }
+            return st;
+        };
+    };
+    const auto none = [](int, double t) { return streamStore(StreamState::None, t); };
+    // Text reaching into the card's right padding would leave pixels of its colours there
+    const auto paddingClean = [&](const Pixels& px, int h) {
+        return countIn(px, w, 8 + 496 - 12, 8, w, h, 0xe6edf3) == 0 && countIn(px, w, 8 + 496 - 12, 8, w, h, 0x9198a1) == 0;
+    };
+    const struct {
+        WidgetLanguage language;
+        const char* tag;
+    } kLanguages[] = {{WidgetLanguage::Ko, "ko"}, {WidgetLanguage::En, "en"}, {WidgetLanguage::Ja, "ja"}};
+    for (const auto& l : kLanguages) {
+        const std::string tag = std::string("_") + l.tag + ".png";
+        int hNone = 0, hLast = 0, hLong = 0, hClean = 0, hStream = 0;
+        const Pixels plain = renderLive(card, l.language, 1, none, "", &hNone);
+        // The real session of 2026-11-15 03:27: 0.95 % late or lost, the PC had no frame for 7.66 %
+        const Pixels last = renderLive(card, l.language, 1,
+                                       withLast(StreamState::None, {"DecodeSlow", "NetworkSlow", "ClientRxLoss"}),
+                                       "pc_stream_last" + tag, &hLast);
+        CHECK(hNone == 76 && hLast == 76 + 4 * 22 && paddingClean(last, hLast));
+        CHECK(countIn(last, w, 8, 8 + 50, w, hLast, 0xe6edf3) > 100);  // the summary's lines, in the text colour
+        // The longest: 100.0 % twice, the longest names, one this build has no words for
+        const Pixels longest = renderLive(card, l.language, 1,
+                                          withLast(StreamState::None,
+                                                   {"RetransmitRequested", "SomeCauseOfALaterSteamVRVersion", "ClientRxLoss"}, 100, 100),
+                                          "pc_stream_last_long" + tag, &hLong);
+        CHECK(hLong == hLast && longest != last && paddingClean(longest, hLong));
+        // ...and the line still reaches its last number (not cut short)
+        CHECK(longest != renderLive(card, l.language, 1,
+                                    withLast(StreamState::None,
+                                             {"RetransmitRequested", "SomeCauseOfALaterSteamVRVersion", "ClientRxLoss"}, 100, 99.9),
+                                    ""));
+        // A clean session: no causes, no line for them
+        const Pixels clean = renderLive(card, l.language, 1, withLast(StreamState::None, {}, 0, 0),
+                                        "pc_stream_last_clean" + tag, &hClean);
+        CHECK(hClean == 76 + 22 && paddingClean(clean, hClean));
+        // Shown only while not streaming
+        CHECK(renderLive(card, l.language, 1, withLast(StreamState::NoHelper, {"DecodeSlow"}), "", &hStream) ==
+              renderLive(card, l.language, 1, [](int, double t) { return streamStore(StreamState::NoHelper, t); }, ""));
+        CHECK(hStream == 76);
+        renderLive(card, l.language, 1, withLast(StreamState::Helper, {"DecodeSlow"}), "", &hStream);
+        CHECK(hStream == 258);
+    }
+    // The causes in words, SteamVR's name after them; a name not known here as it is
+    const WidgetText& ko = widgetText(WidgetLanguage::Ko);
+    const WidgetText& en = widgetText(WidgetLanguage::En);
+    const WidgetText& ja = widgetText(WidgetLanguage::Ja);
+    CHECK(streamCauseText(ko, "NetworkSlow") == "네트워크가 느림 (NetworkSlow)");
+    CHECK(streamCauseText(en, "NetworkSlow") == "Slow network (NetworkSlow)");
+    CHECK(streamCauseText(ja, "NetworkSlow") == "ネットワークが遅い (NetworkSlow)");
+    CHECK(streamCauseText(ko, "SomethingNew") == "SomethingNew" && streamCauseText(en, "") == "");
+    for (const char* name : {"DecodeSlow", "ClientRxLoss", "NetworkSlow", "AppSlow", "RetransmitRequested", "HostRxLoss",
+                             "Holdoff", "PingSpike", "EncodeSlow", "WgpGap"}) {
+        for (const WidgetText* t : {&ko, &en, &ja}) {
+            const std::string said = streamCauseText(*t, name);
+            CHECK(said != name && said.size() > std::string(name).size() + 3 &&
+                  said.compare(said.size() - std::string(name).size() - 1, std::string::npos, std::string(name) + ")") == 0);
+        }
+    }
+}
+
 // The PC stream card (2026-11-15). Panel pixels: the card starts at (8, 8) and is 496 wide. With the helper's
 // values: the text column x 14-202, the fps graph x 210-498 y 18-102, the frame-time graphs y 132-192 (CPU x 14-250,
 // GPU x 262-498), then two text rows. Without them: the title and one line
@@ -1760,6 +1841,7 @@ int main() {
     testSegmentedPillColours();
     testSimpleTemplates();
     testSimpleStream();
+    testPcStreamLast();
     testPcStreamCard();
     testFrameStream();
     testHighlight();

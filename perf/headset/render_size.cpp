@@ -129,6 +129,37 @@ double numberIn(const JsonValue& root, const char* key, double min, double max) 
     return v->number;
 }
 
+/** A whole number within [1, max] (kept in i32 metrics), else 0 */
+int64_t countIn(const JsonValue& root, const char* key, double max) {
+    const double v = numberIn(root, key, 1, max);
+    return std::isnan(v) || v != std::floor(v) ? 0 : static_cast<int64_t>(v);
+}
+
+/** /v2/state's "last": nothing (endedUnix 0) unless its time, frames and both percentages are there and sound */
+LastSession parseLast(const JsonValue* last) {
+    LastSession s;
+    if (last == nullptr || !last->isObject()) return s;
+    const int64_t ended = countIn(*last, "endedUnix", 2147483647.0);
+    s.frames = countIn(*last, "frames", 2147483647.0);
+    s.linkBadPct = numberIn(*last, "linkBadPct", 0, 100);
+    s.pcMissedPct = numberIn(*last, "pcMissedPct", 0, 100);
+    if (ended == 0 || s.frames == 0 || std::isnan(s.linkBadPct) || std::isnan(s.pcMissedPct)) return LastSession();
+    s.endedUnix = ended;
+    // The names are shown as they are: only plain ones, as SteamVR's are (letters and digits, a short string's length)
+    const JsonValue* causes = last->get("causes");
+    if (causes != nullptr && causes->type == JsonValue::Type::Array) {
+        for (const JsonValue& c : causes->items) {
+            if (s.causes.size() >= LastSession::kMaxCauses) break;
+            if (!c.isString() || c.text.empty() || c.text.size() > frame_perf_overlay::kShortStringMax) continue;
+            const bool plain = std::all_of(c.text.begin(), c.text.end(), [](char ch) {
+                return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9');
+            });
+            if (plain) s.causes.push_back(c.text);
+        }
+    }
+    return s;
+}
+
 }  // namespace
 
 HelperReply parseHelperReply(const std::string& body, int& width, int& height) {
@@ -167,6 +198,7 @@ HelperReply parseHelperState(const std::string& body, int& width, int& height, P
     pc.vramUsedMb = numberIn(root, "pcVramUsedMb", 0, 1e7);
     pc.vramTotalMb = numberIn(root, "pcVramTotalMb", 1, 1e7);
     pc.linkMbit = numberIn(root, "linkMbit", 0, 1e5);
+    pc.last = parseLast(root.get("last"));
     return reply;
 }
 
@@ -178,6 +210,30 @@ bool HelperVersion::stateAnswered(const std::string& peer, long status, double n
     }
     if (status == 200 && peer == oldPeer_) oldPeer_.clear();  // updated since
     return false;
+}
+
+void AfterStream::started() {
+    known_ = false;
+    before_ = 0;
+    until_ = -1e300;
+}
+
+void AfterStream::during(int64_t endedUnix) {
+    if (known_) return;
+    known_ = true;
+    before_ = endedUnix;
+}
+
+void AfterStream::ended(double now) {
+    if (!known_) return;  // no helper with /v2/state: nobody to ask
+    until_ = now + kWindowSec;
+    nextAt_ = now;
+}
+
+bool AfterStream::ask(double now) {
+    if (now > until_ || now < nextAt_) return false;
+    nextAt_ = now + kEverySec;
+    return true;
 }
 
 void PingMedian::add(double ms) {
@@ -266,11 +322,47 @@ Reading RenderSizeReader::read(double now, int scenePid) {
     const bool seen = streaming_.streaming(now);
     if (seen == lastSeen_) stable_ = seen;
     lastSeen_ = seen;
-    if (stable_) return readPc(now);
+    if (stable_) {
+        if (!wasStreaming_) {
+            // A new stream: the summary of the one before goes
+            wasStreaming_ = true;
+            after_.started();
+            summary_ = LastSession();
+        }
+        const Reading r = readPc(now);
+        if (r.stream == static_cast<uint32_t>(frame_perf_overlay::StreamState::Helper)) {
+            after_.during(r.pc.last.endedUnix);
+            statePeer_ = peer_;
+        }
+        return r;
+    }
+    if (wasStreaming_) {
+        wasStreaming_ = false;
+        after_.ended(now);
+    }
     // Standalone: the next stream starts with nothing of the last one's (the address stays as a first guess)
     ping_.clear();
     haveGood_ = false;
-    return readLayer(scenePid);
+    Reading r = readLayer(scenePid);
+    if (after_.ask(now)) askLast();
+    r.last = summary_;
+    return r;
+}
+
+void RenderSizeReader::askLast() {
+    std::string body;
+    double connectMs = std::nan("");
+    const long status = httpGet("http://" + statePeer_ + ":" + std::to_string(port_) + "/v2/state", kTimeoutMs, body, connectMs);
+    if (status == 0) return;  // no answer this time (the PC busy closing SteamVR): asked again
+    int w = 0, h = 0;
+    PcState pc;
+    if (status != 200 || parseHelperState(body, w, h, pc) == HelperReply::Invalid) {
+        after_.done();  // not that helper any more
+        return;
+    }
+    if (!after_.isNew(pc.last.endedUnix)) return;  // SteamVR hasn't written it yet
+    summary_ = pc.last;
+    after_.done();
 }
 
 bool RenderSizeReader::askPeer(const std::string& peer, double now, Reading& r) {

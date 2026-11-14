@@ -59,6 +59,14 @@ const std::vector<MetricDef> kRegistry = {
     {metric::kPcCpuPct, "frame.pc_cpu_pct", "%", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
     {metric::kPcLinkMbps, "frame.pc_link_mbps", "Mbps", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
     {metric::kPcPingMs, "frame.pc_ping_ms", "ms", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    // The stream session that ended last (the helper's "last")
+    {metric::kPcLastEndedUnix, "frame.pc_last_ended_unix", "s", W::Frame, S::RenderSize, kRenderSizeMs, T::I32},
+    {metric::kPcLastFrames, "frame.pc_last_frames", "", W::Frame, S::RenderSize, kRenderSizeMs, T::I32},
+    {metric::kPcLastLinkBadPct, "frame.pc_last_link_bad_pct", "%", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    {metric::kPcLastPcMissedPct, "frame.pc_last_pc_missed_pct", "%", W::Frame, S::RenderSize, kRenderSizeMs, T::F32},
+    {metric::kPcLastCause0 + 0, "frame.pc_last_cause0", "", W::Frame, S::RenderSize, kRenderSizeMs, T::ShortString},
+    {metric::kPcLastCause0 + 1, "frame.pc_last_cause1", "", W::Frame, S::RenderSize, kRenderSizeMs, T::ShortString},
+    {metric::kPcLastCause0 + 2, "frame.pc_last_cause2", "", W::Frame, S::RenderSize, kRenderSizeMs, T::ShortString},
     // CPU
     {metric::kCpuUsagePct, "cpu.usage_pct", "%", W::Cpu, S::CpuLoad, kCpuMs, T::F32},
     {metric::kCpuMaxCorePct, "cpu.max_core_pct", "%", W::Cpu, S::CpuLoad, kCpuMs, T::F32},
@@ -174,10 +182,12 @@ const std::vector<uint16_t>& borrowedMetrics(WidgetType type) {
                                                    kBatteryChargerOnline, kBatteryRemainMin, kClock,
                                                    kFrameReprojectedPct, kStreamState, kPcFps};
     // The PC stream card: the stream's state and everything the PC helper says (RenderSize), with the headset's
-    // refresh rate (the frame budget) and reprojection (FrameTiming)
+    // refresh rate (the frame budget) and reprojection (FrameTiming); after a stream, the session's summary
     static const std::vector<uint16_t> kPcStream = {
         kStreamState, kPcFps,         kPcMissedPct,    kPcGpuMs,  kPcGpuMaxMs, kPcCpuMs,  kPcCpuMaxMs,     kPcGpuPct,
         kPcGpuTempC,  kPcVramUsedMib, kPcVramTotalMib, kPcCpuPct, kPcLinkMbps, kPcPingMs, kFrameDisplayHz, kFrameReprojectedPct,
+        kPcLastEndedUnix, kPcLastFrames, kPcLastLinkBadPct, kPcLastPcMissedPct, kPcLastCause0, kPcLastCause0 + 1,
+        kPcLastCause0 + 2,
     };
     static const std::vector<uint16_t> kNone;
     switch (type) {

@@ -85,6 +85,11 @@ void SensorBridge::registerRenderSize(frame_perf_overlay::Scheduler& scheduler, 
         s.pcCpuPct = r.pc.cpuPct;
         s.pcLinkMbps = r.pc.linkMbit;
         s.pcPingMs = r.pingMs;
+        s.pcLastEndedUnix = r.last.endedUnix;
+        s.pcLastFrames = r.last.frames;
+        s.pcLastLinkBadPct = r.last.linkBadPct;
+        s.pcLastPcMissedPct = r.last.pcMissedPct;
+        for (size_t k = 0; k < r.last.causes.size() && k < 3; ++k) s.pcLastCauses[k] = r.last.causes[k];
     };
     AsyncSampler::Apply apply = [this](const SensorSample& s, double now) {
         storeRenderSize(store_, s, renderNoVr_, now);

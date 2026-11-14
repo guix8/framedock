@@ -127,6 +127,10 @@ struct WidgetText {
     const char* pcNoStream;      ///< not streaming
     const char* pcNoHelper;      ///< streaming, the optional PC helper doesn't answer (the README's "PC helper" section)
     const char* pcOldHelper;     ///< streaming, a helper from before /v2/state: it only knows the render size
+    const char* pcLast;          ///< not streaming, the summary of the stream that ended last: its heading
+    const char* pcLastLinkBad;   ///< before a %: frames the viewer saw late or not at all
+    const char* pcLastPcMissed;  ///< before a %: frames the PC had no new picture to send for
+    const char* pcCauses;        ///< before SteamVR's causes for the late and lost frames
 };
 
 /**
@@ -167,6 +171,14 @@ std::string remainTextShort(const WidgetText& t, double minutes);
  * @param seconds NaN or < 0: "--"
  */
 std::string uptimeText(const WidgetText& t, double seconds);
+
+/**
+ * A cause SteamVR names in a stream session's summary, said in the strings' language with its name after it:
+ * "네트워크가 느림 (NetworkSlow)". The names aren't documented, so these are readings of them; one not known here is
+ * returned as it is.
+ * @param name SteamVR's name ("NetworkSlow")
+ */
+std::string streamCauseText(const WidgetText& t, const std::string& name);
 
 /**
  * The throttle badge: SteamVR is holding the app to 1/(throttled + 1) of the refresh rate.

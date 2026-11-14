@@ -1194,20 +1194,33 @@ void drawSimpleB(const Pen& pen, double x, double y, const WidgetContext& ctx) {
 constexpr double kPcRowsTop = kFrameTimesBedY + kFrameTimesH;                   // under the frame-time graphs
 constexpr int kPcStreamFullH = static_cast<int>(kPcRowsTop + 2 * kLineH) + 14;  // and two text rows
 
+/** Whether the summary of the stream that ended last is known (shown while not streaming). */
+bool pcHasLast(const WidgetContext& ctx) {
+    return streamState(ctx) == StreamState::None && ok(ctx, kPcLastLinkBadPct) && ok(ctx, kPcLastPcMissedPct);
+}
+
+/** The causes that summary names (0 to kPcLastCauseSlots). */
+int pcLastCauses(const WidgetContext& ctx) {
+    int n = 0;
+    while (n < kPcLastCauseSlots && ok(ctx, kPcLastCause0 + n)) ++n;
+    return n;
+}
+
 /**
  * The PC stream card's height: the graphs and rows during a stream with the helper's values (and where nothing is
- * known: the editor), else its title and one line.
+ * known: the editor), else its title and one line; after a stream also the summary's line and one per cause.
  */
 int pcStreamHeight(const WidgetContext* ctx) {
     if (ctx == nullptr || streamState(*ctx) == StreamState::Helper) return kPcStreamFullH;
-    return static_cast<int>(kTop) + 20 + static_cast<int>(kLineH) + 12;
+    const int lines = 1 + (pcHasLast(*ctx) ? 1 + pcLastCauses(*ctx) : 0);
+    return static_cast<int>(kTop) + 20 + lines * static_cast<int>(kLineH) + 12;
 }
 
-/** One line of the PC stream card's text, made smaller and then cut where it doesn't fit the card. */
-void pcStreamNote(const Pen& pen, double x, double baseline, const std::string& note) {
-    const double room = kInR - kInX - 16;
+/** One line of the PC stream card's text from left on, made smaller and then cut where it doesn't fit the card. */
+void pcStreamNote(const Pen& pen, double x, double left, double baseline, const std::string& note, Color c = kTextMuted) {
+    const double room = x + kInR - 8 - left;
     const double size = fitSize(pen, note, 15, 12, room, false);
-    pen.text(x + kInX + 8, baseline, ellipsize(pen, note, size, room, false), size, kTextMuted);
+    pen.text(left, baseline, ellipsize(pen, note, size, room, false), size, c);
 }
 
 void drawPcStream(const Pen& pen, double x, double y, const WidgetContext& ctx, const WidgetHistory& h) {
@@ -1218,10 +1231,26 @@ void drawPcStream(const Pen& pen, double x, double y, const WidgetContext& ctx, 
     const StreamState state = streamState(ctx);
     if (state != StreamState::Helper) {
         // Nothing to show: why, in one line
-        pcStreamNote(pen, x, top + 20 + kLineH,
+        double ry = top + 20 + kLineH;
+        pcStreamNote(pen, x, cx + 8, ry,
                      state == StreamState::NoHelper ? t.pcNoHelper
                      : state == StreamState::OldHelper ? t.pcOldHelper
                                                        : t.pcNoStream);
+        if (!pcHasLast(ctx)) return;
+        // After a stream, how it went: "지난 스트리밍 · 늦거나 빠진 프레임 0.9% · PC가 못 낸 프레임 7.7%", then
+        // what SteamVR blames for the late and lost ones, one cause a line
+        ry += kLineH;
+        pcStreamNote(pen, x, cx + 8, ry,
+                     std::string(t.pcLast) + " · " + t.pcLastLinkBad + num(f(ctx, kPcLastLinkBadPct), 1) + "% · " +
+                         t.pcLastPcMissed + num(f(ctx, kPcLastPcMissedPct), 1) + "%",
+                     kText);
+        const int causes = pcLastCauses(ctx);
+        if (causes > 0) pen.text(cx + 8, ry + kLineH, t.pcCauses, 15, kTextMuted);
+        const double causeX = cx + 8 + pen.measure(t.pcCauses, 15);
+        for (int k = 0; k < causes; ++k) {
+            ry += kLineH;
+            pcStreamNote(pen, x, causeX, ry, streamCauseText(t, text(ctx, kPcLastCause0 + k)), kText);
+        }
         return;
     }
     // The graphs' beds: only this state has graphs, so they aren't on the static layer

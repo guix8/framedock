@@ -6,7 +6,7 @@ $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if (-not (Test-Path $csc)) { throw "No C# compiler at $csc (.NET Framework 4.8 is part of Windows 10/11)" }
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $exe = Join-Path $OutDir 'framedock-pc.exe'
-& $csc /nologo /target:winexe /platform:x64 /optimize+ /r:System.Windows.Forms.dll "/out:$exe" (Join-Path $PSScriptRoot 'framedock-pc.cs') (Join-Path $PSScriptRoot 'steamvr.cs')
+& $csc /nologo /target:winexe /platform:x64 /optimize+ /r:System.Windows.Forms.dll "/out:$exe" (Join-Path $PSScriptRoot 'framedock-pc.cs') (Join-Path $PSScriptRoot 'steamvr.cs') (Join-Path $PSScriptRoot 'session.cs')
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
 # The parser's own check: exit code 0 = it reads SteamVR's lines as expected
 $p = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru

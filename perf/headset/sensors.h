@@ -98,6 +98,12 @@ struct SensorSample {
     double pcCpuPct = kNoValue;
     double pcLinkMbps = kNoValue;
     double pcPingMs = kNoValue;  ///< headset to PC and back (the helper request's TCP connect time, median)
+    // The stream session that ended last (render_size.h's LastSession, 2026-11-15): pcLastEndedUnix 0 = not known
+    int64_t pcLastEndedUnix = 0;
+    int64_t pcLastFrames = 0;
+    double pcLastLinkBadPct = kNoValue;
+    double pcLastPcMissedPct = kNoValue;
+    std::string pcLastCauses[3];  ///< SteamVR's names, the most frequent first; "" past the last
 };
 
 /**

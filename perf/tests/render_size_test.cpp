@@ -1,6 +1,7 @@
 // headset/render_size tests: the PC helper's JSON, vrlink.txt's SetPeer lines, the layer's file and its staleness
 // rule, and the standalone read on a fake /proc and runtime directory (no stream there, so no network). The stream's
-// read (2026-11-15) runs against a fake helper on 127.0.0.1: /v2/state, an old helper's 404, no helper.
+// read (2026-11-15) runs against a fake helper on 127.0.0.1: /v2/state, an old helper's 404, no helper; and after a
+// stream, the requests for that session's summary.
 #include "metric_registry.h"
 #include "render_size.h"
 
@@ -139,6 +140,89 @@ void testHelperState() {
     CHECK(w == 5 && h == 5 && near(pc.fps, 77));
     // ...and /render's parser doesn't take a /v2/state body
     CHECK(parseHelperReply(kStateFull, w, h) == HelperReply::Invalid);
+}
+
+// /v2/state's "last": the stream session that ended last on the PC (the helper's own example in its self test)
+void testLastSession() {
+    const std::string head = std::string(kStateNulls).substr(0, std::string(kStateNulls).size() - 1);
+    const auto parse = [&](const std::string& last) {
+        int w = 0, h = 0;
+        PcState pc;
+        CHECK(parseHelperState(head + ",\"last\":" + last + "}", w, h, pc) == HelperReply::NoGame);
+        return pc.last;
+    };
+    LastSession s = parse(R"({"endedUnix":1794680861,"frames":1000,"linkBadPct":5.00,"pcMissedPct":7.70,)"
+                          R"("causes":["DecodeSlow","ClientRxLoss","NetworkSlow"]})");
+    CHECK(s.endedUnix == 1794680861 && s.frames == 1000 && near(s.linkBadPct, 5) && near(s.pcMissedPct, 7.7));
+    CHECK((s.causes == std::vector<std::string> {"DecodeSlow", "ClientRxLoss", "NetworkSlow"}));
+    // No session, or a helper that doesn't say: none
+    CHECK(parse("null").endedUnix == 0);
+    int w = 0, h = 0;
+    PcState pc;
+    CHECK(parseHelperState(kStateNulls, w, h, pc) == HelperReply::NoGame && pc.last.endedUnix == 0);
+    // Anything unsound: none of it is taken (the rest of the answer still is)
+    for (const char* bad : {
+             R"({"endedUnix":0,"frames":1000,"linkBadPct":5,"pcMissedPct":7})",
+             R"({"endedUnix":-5,"frames":1000,"linkBadPct":5,"pcMissedPct":7})",
+             R"({"endedUnix":3000000000,"frames":1000,"linkBadPct":5,"pcMissedPct":7})",
+             R"({"endedUnix":"1794680861","frames":1000,"linkBadPct":5,"pcMissedPct":7})",
+             R"({"endedUnix":1794680861.5,"frames":1000,"linkBadPct":5,"pcMissedPct":7})",
+             R"({"endedUnix":1794680861,"frames":0,"linkBadPct":5,"pcMissedPct":7})",
+             R"({"endedUnix":1794680861,"frames":10.5,"linkBadPct":5,"pcMissedPct":7})",
+             R"({"endedUnix":1794680861,"frames":1000,"linkBadPct":101,"pcMissedPct":7})",
+             R"({"endedUnix":1794680861,"frames":1000,"linkBadPct":5,"pcMissedPct":null})",
+             R"({"endedUnix":1794680861,"frames":1000,"linkBadPct":5})",
+             R"({"frames":1000,"linkBadPct":5,"pcMissedPct":7,"causes":["DecodeSlow"]})",
+             "[1794680861,1000,5,7]", "7", R"("yesterday")", "{}",
+         }) {
+        s = parse(bad);
+        CHECK(s.endedUnix == 0 && s.frames == 0 && std::isnan(s.linkBadPct) && std::isnan(s.pcMissedPct) && s.causes.empty());
+    }
+    // The causes are shown as they are, so only plain names are taken (letters and digits, a short string's
+    // length), three at most; no causes is a clean session
+    s = parse(R"({"endedUnix":5,"frames":9,"linkBadPct":0,"pcMissedPct":0,"causes":["A1",7,"<b>","","Has Space",)"
+              R"("ThisNameIsLongerThanAShortStringHolds","B","C","D"]})");
+    CHECK(s.endedUnix == 5 && (s.causes == std::vector<std::string> {"A1", "B", "C"}));
+    CHECK(parse(R"({"endedUnix":5,"frames":9,"linkBadPct":0,"pcMissedPct":0,"causes":"DecodeSlow"})").causes.empty());
+    s = parse(R"({"endedUnix":5,"frames":9,"linkBadPct":0,"pcMissedPct":100})");
+    CHECK(s.endedUnix == 5 && s.frames == 9 && near(s.linkBadPct, 0) && near(s.pcMissedPct, 100) && s.causes.empty());
+}
+
+// When the helper is asked after a stream, without a network
+void testAfterStream() {
+    AfterStream a;
+    // Never streamed, or a stream whose helper never answered /v2/state: nothing is asked
+    CHECK(!a.ask(0.0) && !a.ask(1000.0));
+    a.started();
+    a.ended(10.0);
+    CHECK(!a.ask(10.0) && !a.ask(15.0) && !a.isNew(999));
+    // A stream whose helper named session 1000 first: the one before it. What it names later in the stream doesn't
+    // move that (SteamVR may write the stream's own before the headset sees the stream end)
+    a.started();
+    a.during(1000);
+    a.during(2000);
+    CHECK(!a.ask(50.0));  // not while it runs
+    a.ended(100.0);
+    CHECK(!a.isNew(1000) && !a.isNew(999) && !a.isNew(0) && a.isNew(1001) && a.isNew(2000));
+    // Asked at once, then every 5 s, for 90 s
+    CHECK(a.ask(100.0) && !a.ask(100.5) && !a.ask(104.9));
+    CHECK(a.ask(105.0) && !a.ask(106.0));
+    int asked = 2;
+    for (double t = 107.0; t <= 400.0; t += 1.0) asked += a.ask(t) ? 1 : 0;
+    CHECK(asked == 19);  // 100, 105, ... 190
+    CHECK(!a.ask(1000.0));
+    // The summary came: no more
+    a.started();
+    a.during(0);  // a helper that had no session before
+    a.ended(500.0);
+    CHECK(a.ask(500.0) && a.isNew(1) && a.ask(505.0));
+    a.done();
+    CHECK(!a.ask(510.0) && !a.ask(515.0));
+    // The next stream knows nothing of the last one
+    a.started();
+    CHECK(!a.isNew(5000));
+    a.ended(600.0);
+    CHECK(!a.ask(600.0));
 }
 
 void testHelperVersion() {
@@ -306,6 +390,11 @@ public:
     }
     int port() const { return port_; }
     void setMode(Mode mode) { mode_ = mode; }
+    /** /v2/state's "last" from now on (JSON; "" = an answer without one) */
+    void setLast(const std::string& last) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        last_ = last;
+    }
     /** The paths asked so far, in order ("/v2/state", "/render"), and forgets them. */
     std::vector<std::string> takeAsked() {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -322,6 +411,7 @@ private:
     std::atomic<Mode> mode_ {Mode::New};
     std::mutex mutex_;
     std::vector<std::string> asked_;
+    std::string last_;
 
     void serve() {
         while (!stopping_) {
@@ -337,9 +427,11 @@ private:
             const size_t a = request.find(' ');
             const size_t b = a == std::string::npos ? a : request.find(' ', a + 1);
             const std::string path = b == std::string::npos ? "" : request.substr(a + 1, b - a - 1);
+            std::string last;
             {
                 std::lock_guard<std::mutex> lock(mutex_);
                 asked_.push_back(path);
+                last = last_;
             }
             const Mode mode = mode_;
             std::string status = "200 OK";
@@ -350,6 +442,7 @@ private:
                 body = R"({"v":1,"app":"steam.app.1172380","width":3048,"height":3048})";
             } else if (path == "/v2/state" && mode == Mode::New) {
                 body = kStateFull;
+                if (!last.empty()) body = body.substr(0, body.size() - 1) + ",\"last\":" + last + "}";
             } else {
                 status = "404 Not Found";
                 body = "not found";
@@ -469,14 +562,132 @@ void testStreamRead() {
     if (std::system(("rm -rf '" + root + "'").c_str()) != 0) std::printf("could not remove %s\n", base);
 }
 
+// After a stream the helper is asked for that session's summary: at once and every 5 s until it names a later
+// session than at the stream's start, for 90 s at most. Kept until the next stream; nothing asked otherwise
+void testAfterStreamRead() {
+    using frame_perf_overlay::StreamState;
+    using Asked = std::vector<std::string>;
+    char base[] = "/tmp/render-size-test-XXXXXX";
+    if (mkdtemp(base) == nullptr) {
+        CHECK(!"mkdtemp");
+        return;
+    }
+    const std::string root = base;
+    const std::string proc = root + "/proc";
+    const std::string logs = root + "/home/.local/share/Steam/logs";
+    CHECK(std::system(("mkdir -p '" + proc + "/4321' '" + logs + "' '" + root + "/run'").c_str()) == 0);
+    writeFile(logs + "/vrlink.txt",
+              "Sun Nov 15 2026 03:00:00.000 - SVLDataLinkTransferUDP::SetPeer 127.0.0.1 -> 127.0.0.1 (port 1)\n");
+    const std::string vrlink("/home/steam/vrlink\0--arg\0", 25);
+    const std::string before = R"({"endedUnix":1000,"frames":500,"linkBadPct":1.50,"pcMissedPct":2.50,"causes":["AppSlow"]})";
+    const std::string own = R"({"endedUnix":2000,"frames":64605,"linkBadPct":0.95,"pcMissedPct":7.66,)"
+                            R"("causes":["DecodeSlow","NetworkSlow","ClientRxLoss"]})";
+    FakeHelper helper;
+    CHECK(helper.port() > 0);
+    helper.setLast(before);
+    RenderSizeReader reader(root + "/home", root + "/run", proc, helper.port());
+
+    // A stream: the helper's "last" is the session before it, which isn't this stream's and isn't shown
+    writeFile(proc + "/4321/cmdline", vrlink);
+    reader.read(9.0, 0);
+    Reading r = reader.read(10.0, 0);
+    CHECK(r.stream == static_cast<uint32_t>(StreamState::Helper) && r.pc.last.endedUnix == 1000 && r.last.endedUnix == 0);
+    // SteamVR writes the stream's own summary a moment before the headset sees the stream end
+    helper.setLast(own);
+    r = reader.read(11.0, 0);
+    CHECK(r.stream == static_cast<uint32_t>(StreamState::Helper) && r.last.endedUnix == 0);
+    CHECK(std::remove((proc + "/4321/cmdline").c_str()) == 0);
+    r = reader.read(12.0, 0);  // gone once: still the stream's read
+    CHECK(r.stream == static_cast<uint32_t>(StreamState::Helper) && r.last.endedUnix == 0);
+    helper.takeAsked();
+    // Seen to end: asked at once, and there it is
+    r = reader.read(13.0, 0);
+    CHECK(r.stream == static_cast<uint32_t>(StreamState::None) && std::isnan(r.pc.fps));
+    CHECK(r.last.endedUnix == 2000 && r.last.frames == 64605 && near(r.last.linkBadPct, 0.95) && near(r.last.pcMissedPct, 7.66));
+    CHECK((r.last.causes == std::vector<std::string> {"DecodeSlow", "NetworkSlow", "ClientRxLoss"}));
+    CHECK((helper.takeAsked() == Asked {"/v2/state"}));
+    // Kept, and nothing more is asked
+    for (const double now : {14.0, 18.0, 23.0, 60.0, 103.0, 150.0}) {
+        r = reader.read(now, 0);
+        CHECK(r.stream == static_cast<uint32_t>(StreamState::None) && r.last.endedUnix == 2000 && r.last.causes.size() == 3);
+    }
+    CHECK(helper.takeAsked().empty());
+
+    // The next stream starts: that summary goes (first when the stream is seen twice)
+    writeFile(proc + "/4321/cmdline", vrlink);
+    r = reader.read(200.0, 0);
+    CHECK(r.stream == static_cast<uint32_t>(StreamState::None) && r.last.endedUnix == 2000);
+    r = reader.read(201.0, 0);
+    CHECK(r.stream == static_cast<uint32_t>(StreamState::Helper) && r.last.endedUnix == 0 && r.pc.last.endedUnix == 2000);
+    // It ends, and SteamVR is late with the file: asked at once and every 5 s; shown when it is there
+    CHECK(std::remove((proc + "/4321/cmdline").c_str()) == 0);
+    reader.read(210.0, 0);
+    helper.takeAsked();
+    r = reader.read(211.0, 0);
+    CHECK(r.stream == static_cast<uint32_t>(StreamState::None) && r.last.endedUnix == 0);
+    CHECK((helper.takeAsked() == Asked {"/v2/state"}));
+    for (const double now : {212.0, 213.0, 215.9}) CHECK(reader.read(now, 0).last.endedUnix == 0);
+    CHECK(helper.takeAsked().empty());
+    CHECK(reader.read(216.0, 0).last.endedUnix == 0);
+    CHECK((helper.takeAsked() == Asked {"/v2/state"}));
+    helper.setLast(R"({"endedUnix":3000,"frames":90,"linkBadPct":0.00,"pcMissedPct":0.00,"causes":[]})");
+    CHECK(reader.read(217.0, 0).last.endedUnix == 0 && helper.takeAsked().empty());
+    r = reader.read(221.0, 0);
+    CHECK(r.last.endedUnix == 3000 && r.last.frames == 90 && r.last.causes.empty());
+    CHECK((helper.takeAsked() == Asked {"/v2/state"}));
+    CHECK(reader.read(226.0, 0).last.endedUnix == 3000 && reader.read(300.0, 0).last.endedUnix == 3000);
+    CHECK(helper.takeAsked().empty());
+
+    // A stream after which no new summary comes: asked for 90 s (19 times), then left alone; nothing is shown
+    writeFile(proc + "/4321/cmdline", vrlink);
+    reader.read(400.0, 0);
+    CHECK(reader.read(401.0, 0).stream == static_cast<uint32_t>(StreamState::Helper));
+    CHECK(std::remove((proc + "/4321/cmdline").c_str()) == 0);
+    reader.read(410.0, 0);
+    helper.takeAsked();
+    for (double now = 411.0; now <= 600.0; now += 1.0) {
+        r = reader.read(now, 0);
+        CHECK(r.stream == static_cast<uint32_t>(StreamState::None) && r.last.endedUnix == 0);
+    }
+    CHECK(helper.takeAsked().size() == 19);
+
+    // A helper that isn't one any more after the stream (404): asked once
+    writeFile(proc + "/4321/cmdline", vrlink);
+    reader.read(700.0, 0);
+    CHECK(reader.read(701.0, 0).stream == static_cast<uint32_t>(StreamState::Helper));
+    CHECK(std::remove((proc + "/4321/cmdline").c_str()) == 0);
+    reader.read(710.0, 0);
+    helper.setMode(FakeHelper::Mode::Old);
+    helper.takeAsked();
+    for (double now = 711.0; now <= 730.0; now += 1.0) CHECK(reader.read(now, 0).last.endedUnix == 0);
+    CHECK((helper.takeAsked() == Asked {"/v2/state"}));
+    helper.setMode(FakeHelper::Mode::New);
+
+    // A stream with an old helper, or with none: nobody to ask afterwards
+    helper.setMode(FakeHelper::Mode::Old);
+    writeFile(proc + "/4321/cmdline", vrlink);
+    reader.read(800.0, 0);
+    CHECK(reader.read(801.0, 0).stream == static_cast<uint32_t>(StreamState::OldHelper));
+    CHECK(std::remove((proc + "/4321/cmdline").c_str()) == 0);
+    reader.read(810.0, 0);
+    helper.takeAsked();
+    for (double now = 811.0; now <= 830.0; now += 1.0) CHECK(reader.read(now, 0).last.endedUnix == 0);
+    CHECK(helper.takeAsked().empty());
+
+    if (std::system(("rm -rf '" + root + "'").c_str()) != 0) std::printf("could not remove %s\n", base);
+}
+
 }  // namespace
 
 int main() {
     testHelperReply();
     testHelperState();
+    testLastSession();
+    testAfterStream();
     testHelperVersion();
     testPingMedian();
     testStreamRead();
+    testAfterStreamRead();
     testVrlinkPeers();
     testLayerFile();
     testStaleness();

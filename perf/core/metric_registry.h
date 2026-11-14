@@ -146,6 +146,16 @@ constexpr uint16_t kPcVramTotalMib = 123;
 constexpr uint16_t kPcCpuPct = 124;         ///< the PC's CPU load, all cores
 constexpr uint16_t kPcLinkMbps = 125;       ///< the stream's estimated bandwidth (vrserver's "Link BW")
 constexpr uint16_t kPcPingMs = 126;         ///< headset to PC and back: the TCP connect time of the helper request, median
+// Read from RenderSize too (2026-11-15): the stream session that ended last, as the PC helper sums up SteamVR's
+// vrlink_pa_*.json ("last" of /v2/state). Asked from the helper once a stream has ended; N/A NotConnected until then
+// and again from the next stream's start (not kept over a restart)
+constexpr uint16_t kPcLastEndedUnix = 127;    ///< i32, Unix seconds on the PC's clock (the file's time)
+constexpr uint16_t kPcLastFrames = 128;       ///< i32, the session's frames
+constexpr uint16_t kPcLastLinkBadPct = 129;   ///< frames the viewer saw late or not at all, % of all
+constexpr uint16_t kPcLastPcMissedPct = 130;  ///< frames the PC had no new picture to send for, % of all
+constexpr uint16_t kPcLastCause0 = 131;       ///< 131-133: short strings, SteamVR's names for what it blames most for
+                                              ///< the link's bad frames ("DecodeSlow"); N/A past the last one
+constexpr uint16_t kPcLastCauseSlots = 3;
 // CPU (widget 2)
 constexpr uint16_t kCpuUsagePct = 200;
 constexpr uint16_t kCpuMaxCorePct = 201;

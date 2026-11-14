@@ -23,7 +23,8 @@ void registerSystemSources(frame_perf_overlay::Scheduler& scheduler, Sensors& se
 
 /**
  * Stores the RenderSize source's metrics (SensorBridge reads them: render_size.h): the render size, the stream's
- * state (always valid) and, with a PC helper that answers /v2/state, its values.
+ * state (always valid) and, with a PC helper that answers /v2/state, its values; after a stream, that session's
+ * summary.
  * @param s the sample's render* / streamState / pc* fields
  * @param noVr no OpenVR: an unknown render size is N/A NoSteamVr rather than NotConnected
  */

@@ -82,6 +82,7 @@ const WidgetText kJapanese = {
     "PC ストリーミング中ではありません",
     "PC ヘルパー（任意）が応答しません。README「PC ヘルパー」をご覧ください",
     "PC ヘルパーの更新が必要です（今はレンダリングサイズのみ）",
+    "前回", "遅れた・欠けたフレーム ", "PC が出せなかったフレーム ", "原因 ",
 };
 
 const WidgetText kEnglish = {
@@ -158,6 +159,7 @@ const WidgetText kEnglish = {
     "No PC stream is running",
     "The optional PC helper isn't answering. See \"PC helper\" in the README",
     "The PC helper needs an update (render size only for now)",
+    "Last stream", "late or lost frames ", "frames the PC didn't make ", "Causes ",
 };
 
 const WidgetText kKorean = {
@@ -234,6 +236,7 @@ const WidgetText kKorean = {
     "PC 스트리밍 중이 아니에요",
     "PC 도우미(선택)가 응답하지 않아요. README의 「PC 도우미」를 보세요",
     "PC 도우미를 업데이트해야 해요 (지금은 렌더 크기만 알 수 있어요)",
+    "지난 스트리밍", "늦거나 빠진 프레임 ", "PC가 못 낸 프레임 ", "원인 ",
 };
 
 }  // namespace
@@ -344,6 +347,33 @@ std::string uptimeText(const WidgetText& t, double seconds) {
     if (minutes >= 1440) return d + "日" + h + "時間";
     if (minutes >= 60) return hours + "時間" + m + "分";
     return m + "分";
+}
+
+std::string streamCauseText(const WidgetText& t, const std::string& name) {
+    // The names seen in SteamVR's files so far
+    static const struct {
+        const char* name;
+        const char* ja;
+        const char* en;
+        const char* ko;
+    } kCauses[] = {
+        {"DecodeSlow", "ヘッドセットのデコードが遅い", "Slow decoding on the headset", "헤드셋 디코딩이 느림"},
+        {"ClientRxLoss", "ヘッドセットで受信ロス", "Lost on the way to the headset", "헤드셋이 받다가 놓침"},
+        {"NetworkSlow", "ネットワークが遅い", "Slow network", "네트워크가 느림"},
+        {"AppSlow", "ゲームが遅い", "Slow game", "게임이 느림"},
+        {"RetransmitRequested", "再送を要求", "Resend requested", "다시 보내 달라고 함"},
+        {"HostRxLoss", "PC で受信ロス", "Lost on the way to the PC", "PC가 받다가 놓침"},
+        {"Holdoff", "送信を保留", "Sending held back", "보내기를 잠시 미룸"},
+        {"PingSpike", "Ping の急上昇", "Ping spike", "핑이 튐"},
+        {"EncodeSlow", "PC のエンコードが遅い", "Slow encoding on the PC", "PC 인코딩이 느림"},
+        {"WgpGap", "パケットの抜け", "Missing packets", "패킷이 빠짐"},
+    };
+    for (const auto& c : kCauses) {
+        if (name != c.name) continue;
+        const char* said = t.language == WidgetLanguage::En ? c.en : t.language == WidgetLanguage::Ko ? c.ko : c.ja;
+        return std::string(said) + " (" + name + ")";
+    }
+    return name;
 }
 
 std::string throttleBadgeText(const WidgetText& t, double hz, int throttled) {
