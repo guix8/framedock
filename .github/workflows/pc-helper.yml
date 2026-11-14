@@ -1,0 +1,41 @@
+name: PC helper
+# Builds the optional Windows PC helper (pc-helper/) with the C# compiler that is part of Windows, on GitHub's runner,
+# so the framedock-pc.exe attached to a release was not built on anyone's own PC. Each build runs the helper's
+# self-test. A published release gets framedock-pc.exe and its SHA-256; other runs keep them as an artifact.
+on:
+  push:
+    paths: ['pc-helper/**', '.github/workflows/pc-helper.yml']
+  pull_request:
+    paths: ['pc-helper/**', '.github/workflows/pc-helper.yml']
+  release:
+    types: [published]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: write  # only used to attach the files to a release
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and self-test
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File pc-helper\build.ps1 -OutDir dist
+          $hash = (Get-FileHash dist\framedock-pc.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  framedock-pc.exe" | Set-Content -NoNewline -Encoding ascii dist\framedock-pc.exe.sha256
+          Get-Content dist\framedock-pc.exe.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: framedock-pc
+          path: |
+            dist/framedock-pc.exe
+            dist/framedock-pc.exe.sha256
+          if-no-files-found: error
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/framedock-pc.exe dist/framedock-pc.exe.sha256 --clobber --repo "${{ github.repository }}"
