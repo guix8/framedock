@@ -183,6 +183,8 @@ enum class Tx {
     BrowserViewZoom,
     BrowserViewZoomReset,
     BrowserViewAspect,
+    BrowserViewVolume,
+    BrowserViewMute,
     BrowserViewAspectNote,
     BrowserMenuCopy,
     BrowserMenuPaste,

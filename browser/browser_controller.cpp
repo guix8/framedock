@@ -96,6 +96,8 @@ BrowserBarState BrowserController::barState(bool pinned, double widthM, bool can
     s.mobile = mobile_;
     s.zoomPct = zoomPct_;
     s.aspect = aspect_;
+    s.volumePct = volumePct_;
+    s.muted = muted_;
     s.addressPreedit = addressEditing_ ? keyboard_.preedit() : std::string();
     s.pinned = pinned;
     s.dragScroll = dragScroll_;
@@ -323,7 +325,8 @@ std::vector<BrowserController::Request> BrowserController::panelPointer(const Pa
     using Hit = BrowserPanel::Hit;
     const auto onPopup = [](Hit h) {
         return h == Hit::FavoriteOpen || h == Hit::FavoriteRemove || h == Hit::MenuRow || h == Hit::Popup ||
-               h == Hit::ViewMobile || h == Hit::ZoomOut || h == Hit::ZoomIn || h == Hit::ZoomReset || h == Hit::Aspect;
+               h == Hit::ViewMobile || h == Hit::ZoomOut || h == Hit::ZoomIn || h == Hit::ZoomReset ||
+               h == Hit::Aspect || h == Hit::VolumeDown || h == Hit::VolumeUp || h == Hit::VolumeMute;
     };
     switch (p.type) {
         case PanelPointer::Type::Leave: releasePage(); break;
@@ -407,6 +410,10 @@ std::vector<BrowserController::Request> BrowserController::panelPointer(const Pa
                     requests.push_back(hit == Hit::ZoomOut  ? Request::ZoomOut
                                        : hit == Hit::ZoomIn ? Request::ZoomIn
                                                             : Request::ZoomReset);
+                } else if (hit == Hit::VolumeDown || hit == Hit::VolumeUp || hit == Hit::VolumeMute) {
+                    requests.push_back(hit == Hit::VolumeDown ? Request::VolumeDown
+                                       : hit == Hit::VolumeUp ? Request::VolumeUp
+                                                              : Request::VolumeMute);
                 } else if (hit == Hit::Aspect) {
                     const Request aspects[4] = {Request::AspectWide, Request::AspectStandard, Request::AspectSquare,
                                                 Request::AspectTall};
@@ -546,6 +553,9 @@ std::vector<BrowserController::Request> BrowserController::panelPointer(const Pa
                 case Hit::ZoomOut:
                 case Hit::ZoomIn:
                 case Hit::ZoomReset:
+                case Hit::VolumeDown:
+                case Hit::VolumeUp:
+                case Hit::VolumeMute:
                 case Hit::Aspect:
                 case Hit::Popup:
                 case Hit::Page:

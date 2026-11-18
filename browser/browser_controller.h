@@ -81,6 +81,9 @@ public:
         ZoomOut,
         ZoomIn,
         ZoomReset,
+        VolumeDown,     ///< 음량 − (the browser's own volume)
+        VolumeUp,       ///< 음량 +
+        VolumeMute,     ///< 음소거 on or off
         AspectWide,     ///< 16:9
         AspectStandard, ///< 4:3
         AspectSquare,   ///< 1:1
@@ -95,6 +98,13 @@ public:
         mobile_ = mobile;
         zoomPct_ = zoomPct;
         aspect_ = aspect;
+        barDirty_ = true;
+    }
+    /** 보기's 음량 as the settings are now (0–100, 음소거) */
+    void setVolume(int percent, bool muted) {
+        if (percent == volumePct_ && muted == muted_) return;
+        volumePct_ = percent;
+        muted_ = muted;
         barDirty_ = true;
     }
     bool viewOpen() const { return viewOpen_; }
@@ -161,6 +171,8 @@ private:
     bool mobile_ = false;
     int zoomPct_ = 100;
     int aspect_ = 0;
+    int volumePct_ = 100;
+    bool muted_ = false;
     size_t addressCaret_ = 0;  ///< the address field's caret (bytes into addressText_)
     BrowserSession::Status status_;
     bool keyboardOpen_ = false;

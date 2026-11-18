@@ -328,6 +328,13 @@ void testBar() {
     rig.controller.setView(true, 125, 0);
     rig.draw();
     CHECK(rig.controller.barState(false, 0.45, true, true).zoomPct == 125);
+    // 음량: the browser's own volume, asked of the main loop like the zoom (the list stays open)
+    CHECK(has(rig.press(Hit::VolumeDown), Request::VolumeDown) && has(rig.press(Hit::VolumeUp), Request::VolumeUp));
+    CHECK(has(rig.press(Hit::VolumeMute), Request::VolumeMute) && rig.controller.viewOpen());
+    rig.controller.setVolume(70, true);
+    rig.draw();
+    CHECK(rig.controller.barState(false, 0.45, true, true).volumePct == 70 &&
+          rig.controller.barState(false, 0.45, true, true).muted);
     const std::string viewPath = pngPath("browser-view-list.png");
     if (!viewPath.empty()) CHECK(rig.panel.writePng(viewPath));
     CHECK(rig.press(Hit::Aspect, 0).empty());  // the 비율 it has: nothing

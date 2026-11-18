@@ -304,7 +304,7 @@ void readBrowser(const JsonValue& root, BrowserSettings& browser, std::vector<st
     warnUnknownKeys(*object,
                     {"chrome_command", "mode", "transport", "home", "bookmarks", "fps", "width", "height", "aspect",
                      "mobile", "zoom_pct", "jpeg_quality",
-                     "keep_audio", "pause_when_removed", "idle_shutdown_min", "width_m", "anchor", "extra_args", "head", "left_wrist",
+                     "keep_audio", "volume_pct", "muted", "pause_when_removed", "idle_shutdown_min", "width_m", "anchor", "extra_args", "head", "left_wrist",
                      "right_wrist"},
                     "browser.", warnings);
     readString(*object, "chrome_command", browser.chromeCommand, warnings);
@@ -342,6 +342,8 @@ void readBrowser(const JsonValue& root, BrowserSettings& browser, std::vector<st
             browser.zoomPct, warnings);
     readInt(*object, "jpeg_quality", 30, 95, browser.jpegQuality, warnings);
     readBool(*object, "keep_audio", browser.keepAudio, warnings);
+    readInt(*object, "volume_pct", 0, 100, browser.volumePct, warnings);
+    readBool(*object, "muted", browser.muted, warnings);
     readBool(*object, "pause_when_removed", browser.pauseWhenRemoved, warnings);
     readInt(*object, "idle_shutdown_min", 0, 1440, browser.idleShutdownMin, warnings);
     readNumber(*object, "width_m", 0.25, 1.5, browser.widthM, warnings);
@@ -384,10 +386,11 @@ std::string browserToJson(const BrowserSettings& b) {
     std::snprintf(line, sizeof(line),
                   "    \"fps\": %d,\n    \"width\": %d,\n    \"height\": %d,\n    \"aspect\": \"%s\",\n"
                   "    \"mobile\": %s,\n    \"zoom_pct\": %d,\n    \"jpeg_quality\": %d,\n"
-                  "    \"keep_audio\": %s,\n    \"pause_when_removed\": %s,\n    \"idle_shutdown_min\": %d,\n"
+                  "    \"keep_audio\": %s,\n    \"volume_pct\": %d,\n    \"muted\": %s,\n"
+                  "    \"pause_when_removed\": %s,\n    \"idle_shutdown_min\": %d,\n"
                   "    \"width_m\": %.4g,\n    \"anchor\": \"%s\",\n",
                   b.fps, b.viewportWidth, b.viewportHeight, browserAspectName(b.aspect), b.mobile ? "true" : "false",
-                  b.zoomPct, b.jpegQuality, b.keepAudio ? "true" : "false",
+                  b.zoomPct, b.jpegQuality, b.keepAudio ? "true" : "false", b.volumePct, b.muted ? "true" : "false",
                   b.pauseWhenRemoved ? "true" : "false", b.idleShutdownMin, fin(b.widthM), browserAnchorName(b.anchor));
     out += line;
     out += "    \"extra_args\": [";

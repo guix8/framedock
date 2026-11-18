@@ -5,7 +5,7 @@
 // isn't ready the page area says why (starting, restarting, failed). While the page waits for an answer to confirm(),
 // prompt() or "leave this page?", the second row is that question with 확인 and 취소.
 //
-// Over the page, drawn again on each new frame until they go: the 즐겨찾기 list and 보기's list (버전, 확대, 비율;
+// Over the page, drawn again on each new frame until they go: the 즐겨찾기 list and 보기's list (버전, 확대, 음량, 비율;
 // each under its button), the panel's own
 // context menu (복사, 붙여넣기, 전체 선택, 링크 열기) and a ring where a long press is held.
 //
@@ -52,6 +52,8 @@ struct BrowserBarState {
     bool mobile = false;           ///< 보기: the mobile version
     int zoomPct = 100;             ///< 보기: the page's zoom
     int aspect = 0;                ///< 보기: 16:9 | 4:3 | 1:1 | 9:16 (0–3)
+    int volumePct = 100;           ///< 보기: the browser's own volume (0–100)
+    bool muted = false;            ///< 보기: 음소거 is on
     double widthM = 0.45;
     bool canShrink = true, canGrow = true;
     // 즐겨찾기 (the saved pages)
@@ -83,6 +85,7 @@ public:
         AddressClear,    ///< the ✕ at the address field's end while it is edited
         ViewMobile,      ///< 보기's 데스크톱 (arg 0) | 모바일 (1)
         ZoomOut, ZoomIn, ZoomReset,
+        VolumeDown, VolumeUp, VolumeMute,  ///< 보기's 음량: − + 음소거 (the browser's own volume)
         Aspect,          ///< 보기's 비율 (arg: BrowserBarState::aspect's index)
         FavoriteOpen,    ///< a row of the 즐겨찾기 list (arg: its index)
         FavoriteRemove,  ///< its ✕ (arg: its index)

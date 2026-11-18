@@ -41,6 +41,7 @@
 #include "placement.h"
 #include "profile_store.h"
 #include "pulse_audio.h"
+#include "browser_volume.h"
 #include "room_view.h"
 #include "scheduler.h"
 #include "sensor_bridge.h"
@@ -1645,6 +1646,11 @@ int runOverlay(const Options& options) {
     VrKeyboard keyboard(fonts);
     BrowserController browserCtl(browserPanel, keyboard, browserInput);
     browserCtl.setView(config.browser.mobile, config.browser.zoomPct, static_cast<int>(config.browser.aspect));
+    browserCtl.setVolume(config.browser.volumePct, config.browser.muted);
+    // The browser's own volume (보기's 음량): Chrome's sound streams, apart from the output's volume. Connected once
+    // the browser has been opened
+    BrowserVolume browserVolume;
+    browserVolume.set(config.browser.volumePct, config.browser.muted);
     // 즐겨찾기 (the panel's ☆ and its list): their own small file, read once here
     FavoriteStore favorites(browserloop::defaultFavoritesPath());
     if (!favorites.load()) {
@@ -2284,6 +2290,18 @@ int runOverlay(const Options& options) {
                     config.browser.zoomPct = r == BrowserController::Request::ZoomReset ? 100
                                              : stepZoom(config.browser.zoomPct,
                                                         r == BrowserController::Request::ZoomIn ? 1 : -1);
+                    dockSave.request(t);
+                    break;
+                case BrowserController::Request::VolumeDown:
+                case BrowserController::Request::VolumeUp:
+                    // A step unmutes too: the level they hear is the one they set
+                    config.browser.volumePct = std::clamp(
+                        config.browser.volumePct + (r == BrowserController::Request::VolumeUp ? 10 : -10), 0, 100);
+                    config.browser.muted = false;
+                    dockSave.request(t);
+                    break;
+                case BrowserController::Request::VolumeMute:
+                    config.browser.muted = !config.browser.muted;
                     dockSave.request(t);
                     break;
                 case BrowserController::Request::AspectWide:
@@ -3152,6 +3170,7 @@ int runOverlay(const Options& options) {
         }
         // The browser panel: Chrome's status and frames (its thread wakes us when either changed), settings changed
         // on the Browser page or in the file, then what changed goes up
+        browserVolume.setActive(browserWorker != nullptr);
         if (config.browser != appliedBrowser) {
             int newW = 0, newH = 0, oldW = 0, oldH = 0;
             config.browser.pageSize(newW, newH);
@@ -3164,6 +3183,8 @@ int runOverlay(const Options& options) {
                 });
             }
             browserCtl.setView(config.browser.mobile, config.browser.zoomPct, static_cast<int>(config.browser.aspect));
+            browserCtl.setVolume(config.browser.volumePct, config.browser.muted);
+            browserVolume.set(config.browser.volumePct, config.browser.muted);
             if (viewport) {
                 browserCtl.setViewport(newW, newH);
                 std::fprintf(stderr, "[browser] Page size %dx%d (%s)\n", newW, newH,

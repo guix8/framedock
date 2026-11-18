@@ -148,6 +148,14 @@ void testSinks() {
     CHECK(audio::percentOf(0x18000) == 100);  // above 100 % shows as 100
     CHECK(audio::volumeOf(100) == 0x10000 && audio::volumeOf(0) == 0 && audio::volumeOf(150) == 0x10000);
     for (int p = 0; p <= 100; ++p) CHECK(audio::percentOf(audio::volumeOf(p)) == p);
+
+    // The browser's streams: ours by the application.id Chrome is started with, or a Chrome by its binary
+    CHECK(audio::isBrowserStream({{"application.id", "framedock-browser"}, {"application.process.binary", "bwrap"}}));
+    CHECK(audio::isBrowserStream({{"application.process.binary", "chrome"}}));
+    CHECK(audio::isBrowserStream({{"application.process.binary", "chromium"}}));
+    CHECK(!audio::isBrowserStream({{"application.id", "framedock"}, {"application.process.binary", "framedock"}}));
+    CHECK(!audio::isBrowserStream({{"application.process.binary", "steamwebhelper"}}));
+    CHECK(!audio::isBrowserStream({}));
 }
 
 void testSinksBeta() {

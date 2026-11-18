@@ -64,6 +64,13 @@ std::string deviceKey(const std::string& name);
  */
 std::string micFor(const std::string& sink, const std::vector<std::string>& sources, const std::string& speakerSink);
 
+/**
+ * Whether a playback stream is the browser's: its application.id is kChromeAudioAppId (chrome_process.h), or (a
+ * Chrome that didn't take the property) its application.process.binary is chrome or chromium.
+ * @param props the stream's property list (those two keys are enough)
+ */
+bool isBrowserStream(const std::map<std::string, std::string>& props);
+
 /** pa_volume_t's 100 % */
 constexpr uint32_t kVolumeNorm = 0x10000;
 /** @return a volume in percent (Pulse's linear-in-the-cubic scale, as pactl and Steam show it), rounded, 0-100 */

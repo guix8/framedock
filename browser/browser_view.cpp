@@ -92,7 +92,7 @@ void crossIcon(cairo_t* cr, double cx, double cy, double r, Color c) {
 // The overlays over the page (layout units)
 constexpr double kListW = 600, kListRowH = 58, kListPad = 10, kListNoteH = 50;
 constexpr double kMenuW = 260, kMenuRowH = 58, kMenuPad = 8;
-constexpr double kViewW = 600, kViewRowH = 66, kViewPad = 22, kViewNoteH = 44;  // 보기's list: three rows and a note
+constexpr double kViewW = 600, kViewRowH = 66, kViewPad = 22, kViewNoteH = 44;  // 보기's list: four rows and a note
 const char* kAspectNames[4] = {"16:9", "4:3", "1:1", "9:16"};
 constexpr double kRingR = 26;
 
@@ -556,7 +556,7 @@ void BrowserPanel::viewBox(double& x, double& y, double& w, double& h) const {
     x = std::clamp(viewRight_ - kViewW, 0.0, std::max(0.0, W - kViewW));
     y = kBarHeight + 6;
     w = kViewW;
-    h = 2 * kViewPad + 3 * kViewRowH + 2 * 16 + kViewNoteH;
+    h = 2 * kViewPad + 4 * kViewRowH + 3 * 16 + kViewNoteH;
 }
 
 void BrowserPanel::menuBox(double& x, double& y, double& w, double& h) const {
@@ -742,7 +742,8 @@ void BrowserPanel::drawOverlays(const Pen& pen) {
         spot(Hit::Popup, 0, x, y, kListW, h);  // the rest of the list: not the page under it
     }
     if (shown_.viewOpen) {
-        // 보기: 버전 (데스크톱 | 모바일), 확대 (− % + 원래대로), 비율 (16:9 … 9:16) and what a 비율 change does
+        // 보기: 버전 (데스크톱 | 모바일), 확대 (− % + 원래대로), 음량 (− % + 음소거), 비율 (16:9 … 9:16) and what a
+        // 비율 change does
         double x, y, w, h;
         viewBox(x, y, w, h);
         card(x, y, w, h);
@@ -772,19 +773,31 @@ void BrowserPanel::drawOverlays(const Pen& pen) {
         ry += kViewRowH + 16;
         pen.text(lx, centerBaseline(ry, kViewRowH, 22), tr(Tx::BrowserViewZoom), 22, kTextMuted);
         const double stepW = 70;
-        const auto small = [&](Hit hit, double bx, double bw, const char* label, double size) {
+        const auto small = [&](Hit hit, double bx, double bw, const char* label, double size, bool sel = false) {
             const bool on = spot(hit, 0, bx, ry, bw, kViewRowH);
-            pen.color(on ? (pressed_ ? kAccentPressed : kControlHover) : kControl);
+            pen.color(sel  ? (on ? kAccentPressed : kAccent)
+                      : on ? (pressed_ ? kAccentPressed : kControlHover)
+                           : kControl);
             pen.roundedRect(bx, ry, bw, kViewRowH, kRadius);
             cairo_fill(pen.cr);
             strokeRounded(pen, bx, ry, bw, kViewRowH, kRadius, on ? kAccent : kBorder, on ? 2.5 : 1.5);
-            textCentered(pen, bx + bw / 2, centerBaseline(ry, kViewRowH, size), label, size, kText, true);
+            textCentered(pen, bx + bw / 2, centerBaseline(ry, kViewRowH, size), label, size, sel ? kOnAccent : kText,
+                         true);
         };
         small(Hit::ZoomOut, cx, stepW, "−", 30);
         textCentered(pen, cx + stepW + 70, centerBaseline(ry, kViewRowH, 26), std::to_string(shown_.zoomPct) + "%", 26,
                      kText, true);
         small(Hit::ZoomIn, cx + stepW + 140, stepW, "+", 30);
         small(Hit::ZoomReset, cx + 2 * stepW + 150, cw - (2 * stepW + 150), tr(Tx::BrowserViewZoomReset), 22);
+        ry += kViewRowH + 16;
+        // 음량: the browser's own (the output's is the 기기 page's); 음소거 keeps the level
+        pen.text(lx, centerBaseline(ry, kViewRowH, 22), tr(Tx::BrowserViewVolume), 22, kTextMuted);
+        small(Hit::VolumeDown, cx, stepW, "−", 30);
+        textCentered(pen, cx + stepW + 70, centerBaseline(ry, kViewRowH, 26), std::to_string(shown_.volumePct) + "%",
+                     26, shown_.muted ? kTextMuted : kText, true);
+        small(Hit::VolumeUp, cx + stepW + 140, stepW, "+", 30);
+        small(Hit::VolumeMute, cx + 2 * stepW + 150, cw - (2 * stepW + 150), tr(Tx::BrowserViewMute), 22,
+              shown_.muted);
         ry += kViewRowH + 16;
         pen.text(lx, centerBaseline(ry, kViewRowH, 22), tr(Tx::BrowserViewAspect), 22, kTextMuted);
         pill(ry, {kAspectNames[0], kAspectNames[1], kAspectNames[2], kAspectNames[3]}, Hit::Aspect, shown_.aspect);

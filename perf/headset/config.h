@@ -151,6 +151,8 @@ struct BrowserSettings {
     int zoomPct = 100;                       ///< "zoom_pct": the page's zoom (kBrowserZoomSteps)
     int jpegQuality = 70;                    ///< "jpeg_quality" (30–95)
     bool keepAudio = true;                   ///< "keep_audio": hidden, the page keeps playing (false: paused)
+    int volumePct = 100;                     ///< "volume_pct": the browser's own volume (0–100, apart from the output's)
+    bool muted = false;                      ///< "muted": the browser's sound off (volume_pct is kept)
     bool pauseWhenRemoved = true;            ///< "pause_when_removed": the headset off pauses the page's video
     int idleShutdownMin = 10;                ///< "idle_shutdown_min": hidden and silent this long → Chrome closes (0 = never)
     double widthM = 0.45;                    ///< "width_m": the panel's width in the room (0.25–1.50 m)
@@ -166,6 +168,7 @@ struct BrowserSettings {
                fps == o.fps && viewportWidth == o.viewportWidth &&
                viewportHeight == o.viewportHeight && aspect == o.aspect && mobile == o.mobile &&
                zoomPct == o.zoomPct && jpegQuality == o.jpegQuality && keepAudio == o.keepAudio &&
+               volumePct == o.volumePct && muted == o.muted &&
                pauseWhenRemoved == o.pauseWhenRemoved &&
                idleShutdownMin == o.idleShutdownMin && widthM == o.widthM && anchor == o.anchor &&
                extraArgs == o.extraArgs && !(head != o.head) && !(leftWrist != o.leftWrist) &&

@@ -113,6 +113,7 @@ pkg_check_modules(CURL REQUIRED IMPORTED_TARGET libcurl)
 add_library(framedock-device STATIC
   ${PERF}/headset/audio_sinks.cpp
   ${PERF}/headset/pulse_audio.cpp
+  ${PERF}/headset/browser_volume.cpp
   ${PERF}/headset/camera_switch.cpp
   ${PERF}/headset/room_view.cpp
   ${PERF}/headset/frame_steam.cpp

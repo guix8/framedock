@@ -20,6 +20,9 @@ enum class DevToolsTransport {
     Port,  ///< --remote-debugging-port=0 on 127.0.0.1 (any local process can connect while it runs)
 };
 
+/** The application.id Chrome's sound streams carry (start() sets PULSE_PROP_OVERRIDE): the browser's own volume */
+constexpr const char* kChromeAudioAppId = "framedock-browser";
+
 struct ChromeLaunch {
     std::vector<std::string> command = {"flatpak", "run", "com.google.Chrome"};  ///< the program and its own arguments
     DevToolsTransport transport = DevToolsTransport::Pipe;

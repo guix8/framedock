@@ -248,6 +248,8 @@ const Row kRows[] = {
     {Tx::BrowserViewZoom, "확대", "Zoom", "拡大"},
     {Tx::BrowserViewZoomReset, "원래대로", "Reset", "元に戻す"},
     {Tx::BrowserViewAspect, "비율", "Aspect", "比率"},
+    {Tx::BrowserViewVolume, "음량", "Volume", "音量"},
+    {Tx::BrowserViewMute, "음소거", "Mute", "ミュート"},
     {Tx::BrowserViewAspectNote, "비율을 바꾸면 Chrome이 같은 페이지로 다시 떠요(영상은 처음부터)",
      "A new aspect reopens Chrome on the same page (videos start over)",
      "比率を変えると Chrome が同じページで開き直します（動画は最初から）"},

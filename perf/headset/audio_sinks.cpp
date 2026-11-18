@@ -1,6 +1,8 @@
 // The sound backend's pure parts. See audio_sinks.h.
 #include "audio_sinks.h"
 
+#include "chrome_process.h"
+
 #include <cmath>
 #include <limits>
 
@@ -134,6 +136,13 @@ AudioState stateFrom(const std::vector<SinkInfo>& sinks, const std::string& defa
         state.muted = level->muted;
     }
     return state;
+}
+
+bool isBrowserStream(const std::map<std::string, std::string>& props) {
+    const auto id = props.find("application.id");
+    if (id != props.end() && id->second == kChromeAudioAppId) return true;
+    const auto binary = props.find("application.process.binary");
+    return binary != props.end() && (binary->second == "chrome" || binary->second == "chromium");
 }
 
 int percentOf(uint32_t volume) {

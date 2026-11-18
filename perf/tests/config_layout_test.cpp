@@ -379,6 +379,7 @@ void testBrowserSettings() {
     CHECK(defaults.browser.fps == 30 && defaults.browser.keepAudio && defaults.browser.idleShutdownMin == 10);
     CHECK(defaults.browser.pauseWhenRemoved);
     CHECK(defaults.browser.aspect == BrowserAspect::Wide && !defaults.browser.mobile && defaults.browser.zoomPct == 100);
+    CHECK(defaults.browser.volumePct == 100 && !defaults.browser.muted);
     // The page's size: 720p's pixels in the 비율's shape (even numbers)
     int pw = 0, ph = 0;
     defaults.browser.pageSize(pw, ph);
@@ -409,6 +410,8 @@ void testBrowserSettings() {
     config.browser.viewportHeight = 900;
     config.browser.jpegQuality = 80;
     config.browser.keepAudio = false;
+    config.browser.volumePct = 40;
+    config.browser.muted = true;
     config.browser.pauseWhenRemoved = false;
     config.browser.idleShutdownMin = 0;
     config.browser.widthM = 0.62;

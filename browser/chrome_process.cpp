@@ -21,6 +21,8 @@
 #include <iterator>
 #include <thread>
 
+extern char** environ;
+
 namespace {
 
 /** @return the program's full path (argv[0] searched in PATH like execvp, done before fork) */
@@ -236,6 +238,16 @@ bool ChromeProcess::start(const std::vector<std::string>& argv, const std::strin
     std::vector<char*> args;
     for (const std::string& a : argv) args.push_back(const_cast<char*>(a.c_str()));
     args.push_back(nullptr);
+    // Its sound streams say they are the browser's (the browser's own volume, perf/headset/browser_volume.h); flatpak
+    // run passes the variable on into the sandbox
+    std::vector<std::string> env;
+    for (char** e = environ; *e != nullptr; ++e) {
+        if (std::strncmp(*e, "PULSE_PROP_OVERRIDE=", 20) != 0) env.emplace_back(*e);
+    }
+    env.emplace_back(std::string("PULSE_PROP_OVERRIDE=application.id=") + kChromeAudioAppId);
+    std::vector<char*> envp;
+    for (const std::string& e : env) envp.push_back(const_cast<char*>(e.c_str()));
+    envp.push_back(nullptr);
     reapLeftovers();
     // The last start's log is kept beside (one generation); this one is appended to, so capLog can cut it back
     if (!logPath.empty()) ::rename(logPath.c_str(), (logPath + ".1").c_str());
@@ -278,7 +290,7 @@ bool ChromeProcess::start(const std::vector<std::string>& argv, const std::strin
         sigemptyset(&none);
         ::sigprocmask(SIG_SETMASK, &none, nullptr);
         for (const int s : {SIGTERM, SIGINT, SIGUSR1, SIGUSR2, SIGPIPE, SIGCHLD}) ::signal(s, SIG_DFL);
-        ::execv(program.c_str(), args.data());
+        ::execve(program.c_str(), args.data(), envp.data());
         ::_exit(127);
     }
     ::setpgid(pid, pid);  // also from here, so signalGroup works even if the child hasn't run yet
