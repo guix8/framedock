@@ -75,6 +75,27 @@ for fs_command in $fs_needed; do
     command -v "$fs_command" >/dev/null 2>&1 || { printf 'Missing required command: %s\n' "$fs_command" >&2; exit 1; }
 done
 
+# ---- The user's service manager: the service, the old apps and autostart need it ----
+# A shell outside a normal login (su, sudo -u, a sandboxed terminal app) may not have the variables that lead to it.
+# The usual place is tried; if it still can't be reached, nothing is changed (before, the files went in and the
+# service was never registered: a launcher that started nothing).
+if ! systemctl --user show-environment >/dev/null 2>&1; then
+    fs_uid_runtime="/run/user/$(id -u)"
+    if [ -S "$fs_uid_runtime/bus" ]; then
+        XDG_RUNTIME_DIR=$fs_uid_runtime
+        DBUS_SESSION_BUS_ADDRESS="unix:path=$fs_uid_runtime/bus"
+        export XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS
+        fs_runtime_dir=$fs_uid_runtime
+    fi
+    if ! systemctl --user show-environment >/dev/null 2>&1; then
+        printf 'Can'"'"'t reach your user'"'"'s service manager (systemctl --user), so nothing was changed.\n' >&2
+        printf 'This terminal is not a normal login of the Steam Frame user. Run the same command from Konsole in\n' >&2
+        printf 'Desktop Mode, or over SSH: ssh %s@<the Frame'"'"'s address>\n' "$(id -un)" >&2
+        exit 1
+    fi
+    printf 'Using the service manager at %s (this shell had no way to it).\n' "$fs_uid_runtime"
+fi
+
 # ---- The apps Frame Dock takes the place of: removed only when the user says so ----
 fs_old_apps=
 for fs_old in framecolor frame-perf-overlay; do
