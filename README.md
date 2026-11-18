@@ -12,9 +12,9 @@ A SteamVR overlay for the Steam Frame. It puts a performance panel, a browser, c
 
 ## Features
 
-- **Performance panel**: frame rate, CPU, GPU, RAM, battery and time left, temperatures, network and the clock. Pick a built-in profile (Simple A, Simple B, Basic, Detailed) or arrange the cards yourself. Control cards (colour presets, sound, passthrough, profiles, browser) can go on it too, and you press their buttons right on the panel.
+- **Performance panel**: frame rate, CPU, GPU, RAM, battery and time left, temperatures, network and the clock. Pick a built-in profile (Simple A, Simple B, Basic, Detailed) or arrange the cards yourself. Control cards (colour presets, sound, passthrough, profiles, browser) can go on it too, and you press their buttons right on the panel. During a PC stream, Simple A, Simple B and the Frame card show the PC's numbers (frame rate, render size, GPU and CPU), and a **PC stream** card adds graphs, ping and how the last stream went (with the optional PC helper).
 - **Dock**: point at the panel with your other hand and pull the trigger. Switch profiles, colour presets, sound and passthrough, or open the browser, all without leaving the game.
-- **Browser**: a real Google Chrome on your wrist, with its own VR keyboard (English, Korean, symbols) and translation. Close the panel and the sound keeps playing; play, pause and jump 10 s from a strip under the performance panel.
+- **Browser**: a real Google Chrome on your wrist, with its own VR keyboard (English, Korean, symbols) and translation. Close the panel and the sound keeps playing; play, pause and jump 10 s from a strip under the performance panel. Its volume is its own (View > Volume), apart from the headset's.
 - **Colour**: brightness, saturation, contrast, gamma and sharpness for everything you see, with presets and a before/after compare. Sharpening can follow your gaze (eye tracking); **Fit** next to it runs a 9-dot gaze fit, tinting the sharpened area on each dot (drawn with the fit in use, so a second fit shows how well the first one matches).
 - **Device**: sound output and volume, passthrough off, mono or colour.
 
@@ -47,10 +47,10 @@ No sudo is needed. Everything goes into your home folder.
 
 ## Install
 
-Download `framedock-0.1.2-steamframe-aarch64.tar.gz` from [Releases](https://github.com/guix8/framedock/releases) to the headset, then run:
+Download `framedock-0.1.3-steamframe-aarch64.tar.gz` from [Releases](https://github.com/guix8/framedock/releases) to the headset, then run:
 
 ```sh
-tar -xzf framedock-0.1.2-steamframe-aarch64.tar.gz
+tar -xzf framedock-0.1.3-steamframe-aarch64.tar.gz
 sh framedock/contrib/install.sh
 ```
 
@@ -75,18 +75,18 @@ sh framedock/contrib/uninstall.sh
 
 Your settings are kept; the script prints the command to delete them.
 
-## Optional: PC helper (render size)
+## Optional: PC helper (PC stream numbers)
 
-The Frame card shows the size the game renders each eye at, for example `2400×2400`. For a game on the headset this comes from the colour layer (turn it on with `framedockctl enable`). For a game streamed from a PC only SteamVR on the PC knows it, so a small Windows helper reads it from SteamVR's log and Frame Dock asks it during the stream (the size then shows with **PC**). Without the helper nothing is shown there.
+During a PC stream the game runs on the PC, so only the PC knows its frame rate, render size and load. A small Windows helper reads them (SteamVR's frame timing and log, the CPU, and an NVIDIA GPU's load, temperature and memory) and Frame Dock asks it during the stream; those numbers show with **PC**. Without the helper the cards show what the headset knows.
 
-Build it with `powershell -ExecutionPolicy Bypass -File pc-helper\build.ps1` (the C# compiler that comes with Windows, no SDK), then on the PC:
+Download `framedock-pc.exe` from the [release](https://github.com/guix8/framedock/releases/latest) (built by GitHub Actions, with its SHA-256) or build it with `powershell -ExecutionPolicy Bypass -File pc-helper\build.ps1` (the C# compiler that comes with Windows, no SDK), then on the PC:
 
 ```bat
 framedock-pc.exe --install      :: copies itself to %LOCALAPPDATA%\FrameDock, starts at sign-in and now
 framedock-pc.exe --uninstall    :: stops it and removes it
 ```
 
-It answers only `GET /render` on TCP port 27463 on your LAN, read-only: the game's app key and render size, nothing else. Windows may ask whether to allow it on private networks; allow it there, or the headset can't reach it.
+It answers only `GET /render` and `GET /v2/state` on TCP port 27463, and only to your LAN, read-only: the numbers above and a summary of the last stream, nothing else. It reads SteamVR's timing only while the headset asks. Windows may ask whether to allow it on private networks; allow it there, or the headset can't reach it.
 
 ## Good to know
 
@@ -95,7 +95,7 @@ It answers only `GET /render` on TCP port 27463 on your LAN, read-only: the game
 - **Google sign-in** may be refused in the browser. On the Browser settings page, set **Runs as** to **Window**, sign in, then set it back to **No window**.
 - DRM video (Netflix and similar) may show black.
 - If the colour correction causes trouble, run `framedockctl disable` over SSH.
-- Frame Dock sends no telemetry. While the settings tab is open it asks GitHub at most once a day for the latest version number and says so if there is a newer one; it never downloads anything. Turn it off with **Check for updates** at the bottom of the tab. During a PC stream it asks the PC on your LAN for the render size (port 27463, the optional PC helper). The browser goes online like any browser.
+- Frame Dock sends no telemetry. While the settings tab is open it asks GitHub at most once a day for the latest version number and says so if there is a newer one; it never downloads anything. Turn it off with **Check for updates** at the bottom of the tab. During a PC stream it asks the PC on your LAN for its numbers (port 27463, the optional PC helper). The browser goes online like any browser.
 
 <details>
 <summary>Build from source</summary>
@@ -106,7 +106,7 @@ SteamOS has no compilers, so build in a [distrobox](https://distrobox.it/) conta
 
 ```sh
 cmake -G Ninja -S . -B build && cmake --build build && ctest --test-dir build
-sh contrib/package.sh 0.1.2    # makes dist/framedock-0.1.2-steamframe-aarch64.tar.gz
+sh contrib/package.sh 0.1.3    # makes dist/framedock-0.1.3-steamframe-aarch64.tar.gz
 ```
 
 You can also build on a PC (Linux or WSL) against a sysroot copied from the headset and copy the result over SSH: see [contrib/cross/README.md](contrib/cross/README.md) (in Korean).

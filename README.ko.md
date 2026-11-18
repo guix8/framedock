@@ -12,9 +12,9 @@ Steam Frame용 SteamVR 오버레이입니다. 성능 패널, 브라우저, 색 �
 
 ## 기능
 
-- **성능 패널**: 프레임 수, CPU, GPU, 메모리, 배터리와 남은 시간, 온도, 네트워크, 시계를 보여 줍니다. 기본 제공 프로필(간단 A, 간단 B, 기본, 상세)을 고르거나 카드를 직접 배치할 수 있습니다. 조작 카드(색 보정, 소리, 패스스루, 프로필, 브라우저)도 넣을 수 있고, 그 버튼은 패널에서 바로 누릅니다.
+- **성능 패널**: 프레임 수, CPU, GPU, 메모리, 배터리와 남은 시간, 온도, 네트워크, 시계를 보여 줍니다. 기본 제공 프로필(간단 A, 간단 B, 기본, 상세)을 고르거나 카드를 직접 배치할 수 있습니다. 조작 카드(색 보정, 소리, 패스스루, 프로필, 브라우저)도 넣을 수 있고, 그 버튼은 패널에서 바로 누릅니다. PC 스트리밍 중에는 간단 A, 간단 B, 프레임 카드가 PC의 수치(프레임 수, 렌더 크기, GPU, CPU)를 보여 주고, **PC 스트리밍** 카드로 그래프, 핑, 지난 스트리밍 요약을 볼 수 있습니다(선택 사항인 PC 도우미 필요).
 - **도크**: 다른 손으로 패널을 가리키고 트리거를 당기면 열립니다. 게임을 벗어나지 않고 프로필, 색 보정 프리셋, 소리, 패스스루를 바꾸거나 브라우저를 엽니다.
-- **브라우저**: 손목에 띄우는 실제 Google Chrome입니다. 전용 VR 키보드(한글, 영문, 기호)와 번역 기능이 있습니다. 패널을 닫아도 소리는 계속 나오고, 성능 패널 아래에 붙는 조작 줄로 재생·멈춤·10초 앞뒤 이동을 할 수 있습니다.
+- **브라우저**: 손목에 띄우는 실제 Google Chrome입니다. 전용 VR 키보드(한글, 영문, 기호)와 번역 기능이 있습니다. 패널을 닫아도 소리는 계속 나오고, 성능 패널 아래에 붙는 조작 줄로 재생·멈춤·10초 앞뒤 이동을 할 수 있습니다. 음량은 헤드셋 음량과 따로 조절합니다(보기 > 음량).
 - **색 보정**: 눈에 보이는 모든 화면의 밝기, 채도, 대비, 감마, 선명도를 조절합니다. 프리셋과 보정 전후 비교가 있습니다. 선명하게 하는 곳이 시선을 따라가게 할 수 있습니다(시선 추적). 옆의 **보정**은 점 9개를 보는 시선 보정입니다. 보정하는 동안 각 점에서 샤픈 영역을 지금 쓰는 보정으로 색칠해서, 두 번째 보정에서는 첫 보정이 얼마나 맞는지 바로 보입니다.
 - **기기**: 소리 출력 장치와 음량, 패스스루(끔·흑백·컬러)를 바꿉니다.
 
@@ -47,10 +47,10 @@ sudo는 필요 없습니다. 모든 파일은 홈 폴더에 설치됩니다.
 
 ## 설치
 
-[Releases](https://github.com/guix8/framedock/releases)에서 `framedock-0.1.2-steamframe-aarch64.tar.gz`를 헤드셋으로 받은 뒤 다음을 실행합니다.
+[Releases](https://github.com/guix8/framedock/releases)에서 `framedock-0.1.3-steamframe-aarch64.tar.gz`를 헤드셋으로 받은 뒤 다음을 실행합니다.
 
 ```sh
-tar -xzf framedock-0.1.2-steamframe-aarch64.tar.gz
+tar -xzf framedock-0.1.3-steamframe-aarch64.tar.gz
 sh framedock/contrib/install.sh
 ```
 
@@ -75,18 +75,18 @@ sh framedock/contrib/uninstall.sh
 
 설정은 남겨 둡니다. 설정까지 지우는 명령은 스크립트가 알려 줍니다.
 
-## 선택: PC 도우미 (렌더 크기)
+## 선택: PC 도우미 (PC 스트리밍 수치)
 
-프레임 카드에 게임이 한쪽 눈을 그리는 크기(예: `2400×2400`)가 나옵니다. 헤드셋에서 도는 게임은 색 보정 레이어가 알려 줍니다(`framedockctl enable`로 켭니다). PC에서 스트리밍하는 게임은 PC의 SteamVR만 이 크기를 알기 때문에, 작은 Windows 도우미가 SteamVR 로그에서 읽고 Frame Dock이 스트리밍 중에 물어봅니다(이때 크기 옆에 **PC**가 붙습니다). 도우미가 없으면 아무것도 나오지 않습니다.
+PC 스트리밍 중에는 게임이 PC에서 돌기 때문에 프레임 수, 렌더 크기, 부하는 PC만 압니다. 작은 Windows 도우미가 이 값들(SteamVR의 프레임 타이밍과 로그, CPU, NVIDIA GPU의 사용률·온도·메모리)을 읽고 Frame Dock이 스트리밍 중에 물어봅니다. 이 수치에는 **PC**가 붙습니다. 도우미가 없으면 카드에는 헤드셋이 아는 값만 나옵니다.
 
-`powershell -ExecutionPolicy Bypass -File pc-helper\build.ps1`로 빌드합니다(Windows에 들어 있는 C# 컴파일러, SDK 불필요). 그다음 PC에서:
+[릴리스](https://github.com/guix8/framedock/releases/latest)에서 `framedock-pc.exe`를 내려받거나(GitHub Actions가 빌드, SHA-256 함께 제공) `powershell -ExecutionPolicy Bypass -File pc-helper\build.ps1`로 빌드합니다(Windows에 들어 있는 C# 컴파일러, SDK 불필요). 그다음 PC에서:
 
 ```bat
 framedock-pc.exe --install      :: %LOCALAPPDATA%\FrameDock에 복사, 로그인할 때와 지금 시작
 framedock-pc.exe --uninstall    :: 멈추고 지움
 ```
 
-LAN의 TCP 27463 포트에서 `GET /render`에만 답하며 읽기 전용입니다. 게임의 앱 키와 렌더 크기 말고는 아무것도 알려 주지 않습니다. Windows가 개인 네트워크에서 허용할지 물을 수 있습니다. 허용해야 헤드셋이 접속할 수 있습니다.
+TCP 27463 포트에서 LAN에만, `GET /render`와 `GET /v2/state`에만 답하며 읽기 전용입니다. 위의 수치와 지난 스트리밍 요약 말고는 아무것도 알려 주지 않습니다. SteamVR 타이밍은 헤드셋이 물어보는 동안에만 읽습니다. Windows가 개인 네트워크에서 허용할지 물을 수 있습니다. 허용해야 헤드셋이 접속할 수 있습니다.
 
 ## 알아 두면 좋은 점
 
@@ -95,7 +95,7 @@ LAN의 TCP 27463 포트에서 `GET /render`에만 답하며 읽기 전용입니�
 - 브라우저에서 **Google 로그인**이 거부될 수 있습니다. 브라우저 설정 페이지에서 **실행 방식**을 **창**으로 바꿔 로그인한 뒤 **창 없이**로 되돌리십시오.
 - DRM이 걸린 영상(Netflix 등)은 검게 나올 수 있습니다.
 - 색 보정 때문에 문제가 생기면 SSH로 `framedockctl disable`을 실행합니다.
-- Frame Dock은 사용 통계를 보내지 않습니다. 설정 탭을 열면 하루 한 번까지 GitHub에 최신 버전 번호를 물어보고, 새 버전이 있으면 알려 줍니다. 아무것도 내려받지 않습니다. 탭 아래쪽의 **새 버전 확인**으로 끌 수 있습니다. PC 스트리밍 중에는 LAN의 PC에 렌더 크기를 물어봅니다(27463 포트, 선택 사항인 PC 도우미). 브라우저는 일반 브라우저처럼 인터넷에 연결됩니다.
+- Frame Dock은 사용 통계를 보내지 않습니다. 설정 탭을 열면 하루 한 번까지 GitHub에 최신 버전 번호를 물어보고, 새 버전이 있으면 알려 줍니다. 아무것도 내려받지 않습니다. 탭 아래쪽의 **새 버전 확인**으로 끌 수 있습니다. PC 스트리밍 중에는 LAN의 PC에 수치를 물어봅니다(27463 포트, 선택 사항인 PC 도우미). 브라우저는 일반 브라우저처럼 인터넷에 연결됩니다.
 
 <details>
 <summary>소스에서 빌드</summary>
@@ -106,7 +106,7 @@ SteamOS에는 컴파일러가 없으므로, glibc가 호스트보다 새롭지 �
 
 ```sh
 cmake -G Ninja -S . -B build && cmake --build build && ctest --test-dir build
-sh contrib/package.sh 0.1.2    # dist/framedock-0.1.2-steamframe-aarch64.tar.gz 를 만듭니다
+sh contrib/package.sh 0.1.3    # dist/framedock-0.1.3-steamframe-aarch64.tar.gz 를 만듭니다
 ```
 
 헤드셋에서 복사한 sysroot로 PC(Linux 또는 WSL)에서 빌드하고 SSH로 옮길 수도 있습니다. [contrib/cross/README.md](contrib/cross/README.md)를 보세요.
