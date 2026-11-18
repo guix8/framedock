@@ -343,14 +343,25 @@ namespace FrameDockPc
         [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode)]
         static extern IntPtr LoadLibraryW(string path);
 
-        long lastIdle, lastTotal;
-        bool haveCpu;
+        /// <summary>Seconds the CPU number covers: a burst of a second or two (a background task) doesn't show as 100 %,
+        /// a load that stays does.</summary>
+        public const int CpuWindowSec = 5;
+        // The last readings, one a second (Sample), oldest first; the number is from the oldest to the newest
+        readonly System.Collections.Generic.Queue<long[]> cpuTimes = new System.Collections.Generic.Queue<long[]>();
         int nvml;  // 0 = not tried, 1 = working, -1 = not there
         bool noTemperature;
         IntPtr device;
 
         /// <summary>Nobody asks any more: the next CPU number starts from then, not from now back to the last one.</summary>
-        public void Idle() { haveCpu = false; }
+        public void Idle() { cpuTimes.Clear(); }
+
+        /// <summary>The CPU in use between two readings of GetSystemTimes (idle, total = kernel + user), 0-100; null when
+        /// no time passed between them.</summary>
+        public static double? CpuBetween(long idle0, long total0, long idle1, long total1)
+        {
+            if (total1 <= total0) return null;
+            return Math.Max(0.0, Math.Min(100.0, 100.0 * (1.0 - (double)(idle1 - idle0) / (total1 - total0))));
+        }
 
         public double? CpuPct { get; private set; }
         public double? GpuPct { get; private set; }
@@ -358,7 +369,7 @@ namespace FrameDockPc
         public double? VramUsedMb { get; private set; }
         public double? VramTotalMb { get; private set; }
 
-        /// <summary>Since the last call (the first call gives no CPU number yet).</summary>
+        /// <summary>The CPU over the last CpuWindowSec readings (the first call gives no CPU number yet).</summary>
         public void Sample()
         {
             long idle, kernel, user;
@@ -366,11 +377,13 @@ namespace FrameDockPc
             if (GetSystemTimes(out idle, out kernel, out user))
             {
                 long total = kernel + user;  // kernel time includes idle time
-                if (haveCpu && total > lastTotal)
-                    CpuPct = Math.Max(0.0, Math.Min(100.0, 100.0 * (1.0 - (double)(idle - lastIdle) / (total - lastTotal))));
-                lastIdle = idle;
-                lastTotal = total;
-                haveCpu = true;
+                cpuTimes.Enqueue(new long[] { idle, total });
+                while (cpuTimes.Count > CpuWindowSec + 1) cpuTimes.Dequeue();
+                if (cpuTimes.Count > 1)
+                {
+                    long[] oldest = cpuTimes.Peek();
+                    CpuPct = CpuBetween(oldest[0], oldest[1], idle, total);
+                }
             }
             GpuPct = GpuTempC = VramUsedMb = VramTotalMb = null;
             if (nvml < 0) return;

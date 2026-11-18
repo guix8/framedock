@@ -559,6 +559,11 @@ namespace FrameDockPc
                                        "\"cause_by_outcome\":{\"NotReceived\":{\"PingSpike\":2,\"<b>\\u0041\":9,\"WgpGap\":null,\"HostRxLoss\":-1}," +
                                        "\"DisplayedLate\":[1,2]}}", 5);
             if (sum == null || Math.Abs(sum.LinkBadPct - 2.0) > 1e-9 || string.Join(",", sum.Causes.ToArray()) != "PingSpike") failures++;
+            // The CPU number: idle 75 of 100 → 25 %; no time between → none; idle past total (clock steps) → 0
+            double? cpu = PcLoad.CpuBetween(100, 200, 175, 300);
+            if (cpu == null || Math.Abs(cpu.Value - 25.0) > 1e-9) failures++;
+            if (PcLoad.CpuBetween(100, 200, 100, 200) != null) failures++;
+            if (PcLoad.CpuBetween(0, 0, 150, 100) != 0.0) failures++;
             return failures;
         }
     }
