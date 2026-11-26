@@ -320,4 +320,5 @@ if(BUILD_TESTING)
   # The app and the colour layer start on SteamOS stable's glibc (guix8/framedock#3)
   add_test(NAME glibc-floor COMMAND sh ${CMAKE_SOURCE_DIR}/tests/test_glibc_floor.sh $<TARGET_FILE:framedock>
            ${CMAKE_BINARY_DIR}/vkbasalt/src/libvkbasalt.so)
+  set_tests_properties(glibc-floor PROPERTIES SKIP_RETURN_CODE 77)
 endif()

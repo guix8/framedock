@@ -29,6 +29,8 @@ else
     meson setup --wipe --buildtype=release "$fc_layer_build" "$fc_source_dir/third_party/vkbasalt"
 fi
 ninja -C "$fc_layer_build"
+# Both start on SteamOS stable's glibc and libstdc++ (guix8/framedock#3: a build on a newer SteamOS didn't)
+sh "$fc_source_dir/tests/test_glibc_floor.sh" "$fc_source_dir/build/framedock" "$fc_layer_build/src/libvkbasalt.so"
 
 fc_temp_dir=$(mktemp -d)
 trap 'rm -rf "$fc_temp_dir"' EXIT HUP INT TERM
