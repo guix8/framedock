@@ -317,4 +317,7 @@ if(BUILD_TESTING)
   add_test(NAME framedockctl COMMAND sh ${CMAKE_SOURCE_DIR}/tests/test_framedockctl.sh)
   add_test(NAME framecolor-guard COMMAND sh ${CMAKE_SOURCE_DIR}/tests/test_guard.sh)
   add_test(NAME framedock-python COMMAND python3 -m unittest discover -s ${CMAKE_SOURCE_DIR}/tests)
+  # The app and the colour layer start on SteamOS stable's glibc (guix8/framedock#3)
+  add_test(NAME glibc-floor COMMAND sh ${CMAKE_SOURCE_DIR}/tests/test_glibc_floor.sh $<TARGET_FILE:framedock>
+           ${CMAKE_BINARY_DIR}/vkbasalt/src/libvkbasalt.so)
 endif()

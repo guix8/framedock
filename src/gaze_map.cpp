@@ -22,9 +22,14 @@ std::optional<Uv> directionToNdc(const std::array<float, 3>& head, const EyeView
 }
 
 std::array<float, 2> gazeAngles(const std::array<float, 3>& d) {
-    constexpr float kScale = 4.0f / 3.14159265f;
-    return {{std::clamp(std::atan2(d[0], -d[2]) * kScale, -1.0f, 1.0f),
-             std::clamp(std::atan2(d[1], -d[2]) * kScale, -1.0f, 1.0f)}};
+    // In double: glibc 2.43 gave atan2f a new symbol version, and a build against it doesn't start on SteamOS stable
+    // (glibc 2.39, guix8/framedock#3). atan2 has the old one
+    constexpr double kScale = 4.0 / 3.14159265;
+    const auto angle = [&](float a) {
+        return static_cast<float>(std::clamp(std::atan2(static_cast<double>(a), -static_cast<double>(d[2])) * kScale,
+                                             -1.0, 1.0));
+    };
+    return {{angle(d[0]), angle(d[1])}};
 }
 
 std::array<float, 3> anglesToDirection(float x, float y) {
